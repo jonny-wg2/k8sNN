@@ -11,11 +11,22 @@ A beautiful macOS menubar app that monitors the authentication status of your Ku
 - **Periodic Checks**: Automatically refreshes authentication status every 5 minutes
 - **Smart URL Generation**: Automatically constructs login URLs for wgtwo.com clusters
 
+## Download
+
+**📥 [Download the latest release](https://github.com/jonny-wg2/k8sNN/releases/latest)**
+
+Choose from:
+
+- **K8sNN.dmg** - Easy installer with drag-and-drop setup
+- **K8sNN.zip** - Manual installation archive
+
+For detailed installation instructions, see [INSTALLATION.md](INSTALLATION.md).
+
 ## Requirements
 
 - macOS 14.0 or later
 - kubectl installed and configured
-- Xcode 15.0 or later (for building)
+- Xcode 15.0 or later (for building from source)
 
 ## Installation
 
@@ -72,15 +83,18 @@ The app automatically generates login URLs for clusters following these patterns
 ## Troubleshooting
 
 ### "No clusters found"
+
 - Ensure kubectl is installed and in your PATH
 - Check that `~/.kube/config` exists and contains cluster configurations
 - Try running `kubectl config get-contexts` in Terminal
 
 ### "Failed to get kubectl contexts"
+
 - Verify kubectl is installed at `/usr/local/bin/kubectl`
 - If kubectl is installed elsewhere, update the path in `KubernetesManager.swift`
 
 ### Authentication checks failing
+
 - Ensure you have network connectivity
 - Check that your kubectl contexts are properly configured
 - Some clusters may require VPN access
