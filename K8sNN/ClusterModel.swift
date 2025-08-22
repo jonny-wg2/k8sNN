@@ -1,0 +1,156 @@
+import Foundation
+
+struct KubernetesCluster: Identifiable, Codable {
+    let id: UUID
+    let name: String
+    let clusterName: String
+    let authInfo: String
+    let namespace: String?
+    var isAuthenticated: Bool
+    var lastChecked: Date
+
+    init(name: String, clusterName: String, authInfo: String, namespace: String?) {
+        self.id = UUID()
+        self.name = name
+        self.clusterName = clusterName
+        self.authInfo = authInfo
+        self.namespace = namespace
+        self.isAuthenticated = false
+        self.lastChecked = Date()
+    }
+    
+    // Computed property to get the login URL
+    var loginURL: String? {
+        // Extract the domain from cluster name
+        // Example: j0nny-echo.pdx.prod.wgtwo.com -> login.echo.pdx.prod.wgtwo.com
+        // First try the full name (for contexts like "j0nny-echo.pdx.prod.wgtwo.com")
+        let fullName = name.contains(".") ? name : clusterName
+        let components = fullName.split(separator: ".")
+
+        if components.count >= 4 {
+            let firstPart = String(components[0]) // j0nny-echo
+            let region = components[1] // pdx
+            let environment = components[2] // prod
+            let domain = components[3] // wgtwo
+            let tld = components.count > 4 ? String(components[4]) : "com" // com
+
+            // Extract cluster name from first part (remove user prefix)
+            var clusterPart = firstPart
+            if firstPart.contains("-") {
+                let parts = firstPart.split(separator: "-", maxSplits: 1)
+                if parts.count > 1 {
+                    clusterPart = String(parts[1]) // echo
+                }
+            }
+
+            // Handle different environments
+            if environment == "prod" || environment == "dev" || environment == "infrasvc" {
+                return "https://login.\(clusterPart).\(region).\(environment).\(domain).\(tld)"
+            }
+        }
+
+        // Special handling for dub.dev and dub.prod patterns
+        // Example: j0nny-dub.prod.wgtwo.com -> login.dub.prod.wgtwo.com
+        if components.count == 4 {
+            let firstPart = String(components[0]) // j0nny-dub
+            let environment = components[1] // prod
+            let domain = components[2] // wgtwo
+            let tld = components[3] // com
+
+            // Extract cluster name from first part (remove user prefix)
+            var clusterPart = firstPart
+            if firstPart.contains("-") {
+                let parts = firstPart.split(separator: "-", maxSplits: 1)
+                if parts.count > 1 {
+                    clusterPart = String(parts[1]) // dub
+                }
+            }
+
+            // Handle dub.dev and dub.prod patterns
+            if (environment == "prod" || environment == "dev") && domain == "wgtwo" {
+                return "https://login.\(clusterPart).\(environment).\(domain).\(tld)"
+            }
+        }
+
+        return nil
+    }
+    
+    // Check if this cluster uses Dex authentication (has a login URL)
+    var usesDexAuth: Bool {
+        return loginURL != nil
+    }
+}
+
+struct KubernetesConfig: Codable {
+    let clusters: [ClusterInfo]
+    let contexts: [ContextInfo]
+    let users: [UserInfo]
+    let currentContext: String?
+    
+    private enum CodingKeys: String, CodingKey {
+        case clusters
+        case contexts
+        case users
+        case currentContext = "current-context"
+    }
+}
+
+struct ClusterInfo: Codable {
+    let name: String
+    let cluster: ClusterDetails
+}
+
+struct ClusterDetails: Codable {
+    let server: String
+}
+
+struct ContextInfo: Codable {
+    let name: String
+    let context: ContextDetails
+}
+
+struct ContextDetails: Codable {
+    let cluster: String
+    let user: String
+    let namespace: String?
+}
+
+struct UserInfo: Codable {
+    let name: String
+    let user: UserDetails
+}
+
+struct UserDetails: Codable {
+    let authProvider: AuthProvider?
+    let token: String?
+    let clientCertificateData: String?
+    let clientKeyData: String?
+    
+    private enum CodingKeys: String, CodingKey {
+        case authProvider = "auth-provider"
+        case token
+        case clientCertificateData = "client-certificate-data"
+        case clientKeyData = "client-key-data"
+    }
+}
+
+struct AuthProvider: Codable {
+    let name: String
+    let config: AuthProviderConfig
+}
+
+struct AuthProviderConfig: Codable {
+    let idpIssuerUrl: String?
+    let clientId: String?
+    let clientSecret: String?
+    let refreshToken: String?
+    let idToken: String?
+    
+    private enum CodingKeys: String, CodingKey {
+        case idpIssuerUrl = "idp-issuer-url"
+        case clientId = "client-id"
+        case clientSecret = "client-secret"
+        case refreshToken = "refresh-token"
+        case idToken = "id-token"
+    }
+}
