@@ -372,7 +372,7 @@ struct ClusterLoginURLRow: View {
 
             // Command input field
             VStack(alignment: .leading, spacing: 4) {
-                Text("Custom Command (optional)")
+                Text("Custom Command (e.g. ssh proxy)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .fontWeight(.medium)
