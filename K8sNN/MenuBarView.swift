@@ -21,7 +21,7 @@ struct MenuBarView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: showingSettings)
-        .frame(width: 340)
+        .frame(width: 420)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
@@ -216,13 +216,15 @@ struct ClusterRowView: View {
                     Text(cluster.name)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.primary)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
 
                     if cluster.usesDexAuth {
                         Text(cluster.clusterName)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
                     } else {
                         Text("Local cluster")
                             .font(.caption)
@@ -230,47 +232,53 @@ struct ClusterRowView: View {
                             .italic()
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Spacer()
 
-                // Action indicator and status
-                if cluster.isAuthenticated {
-                    Text("Open Terminal")
-                        .font(.caption2)
-                        .foregroundStyle(.blue)
-                        .fontWeight(.medium)
-                        .opacity(isHovered ? 1.0 : 0.8)
-                        .animation(.easeInOut(duration: 0.2), value: isHovered)
+                // Action indicator and status - more compact layout
+                VStack(alignment: .trailing, spacing: 2) {
+                    if cluster.isAuthenticated {
+                        HStack(spacing: 4) {
+                            Text("Open Terminal")
+                                .font(.caption2)
+                                .foregroundStyle(.blue)
+                                .fontWeight(.medium)
+                                .opacity(isHovered ? 1.0 : 0.8)
+                                .animation(.easeInOut(duration: 0.2), value: isHovered)
 
-                    Image(systemName: "terminal.fill")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.blue)
-                        .opacity(isHovered ? 1.0 : 0.7)
-                        .scaleEffect(isHovered ? 1.1 : 1.0)
-                        .animation(.easeInOut(duration: 0.2), value: isHovered)
-                } else if cluster.usesDexAuth {
-                    Text("Login Required")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
-                        .fontWeight(.medium)
-                        .opacity(isHovered ? 1.0 : 0.8)
-                        .animation(.easeInOut(duration: 0.2), value: isHovered)
+                            Image(systemName: "terminal.fill")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.blue)
+                                .opacity(isHovered ? 1.0 : 0.7)
+                                .scaleEffect(isHovered ? 1.1 : 1.0)
+                                .animation(.easeInOut(duration: 0.2), value: isHovered)
+                        }
+                    } else if cluster.usesDexAuth {
+                        HStack(spacing: 4) {
+                            Text("Login Required")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                                .fontWeight(.medium)
+                                .opacity(isHovered ? 1.0 : 0.8)
+                                .animation(.easeInOut(duration: 0.2), value: isHovered)
 
-                    Image(systemName: "arrow.up.right.square.fill")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.blue)
-                        .opacity(isHovered ? 1.0 : 0.7)
-                        .scaleEffect(isHovered ? 1.1 : 1.0)
-                        .animation(.easeInOut(duration: 0.2), value: isHovered)
-                }
+                            Image(systemName: "arrow.up.right.square.fill")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.blue)
+                                .opacity(isHovered ? 1.0 : 0.7)
+                                .scaleEffect(isHovered ? 1.1 : 1.0)
+                                .animation(.easeInOut(duration: 0.2), value: isHovered)
+                        }
+                    }
 
-                // Last checked time
-                if cluster.lastChecked != Date(timeIntervalSince1970: 0) {
-                    Text(timeAgoString(from: cluster.lastChecked))
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .fontWeight(.medium)
-                        .frame(width: 35, alignment: .trailing)
+                    // Last checked time
+                    if cluster.lastChecked != Date(timeIntervalSince1970: 0) {
+                        Text(timeAgoString(from: cluster.lastChecked))
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .fontWeight(.medium)
+                    }
                 }
             }
             .padding(.horizontal, 16)
