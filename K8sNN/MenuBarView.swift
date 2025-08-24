@@ -254,7 +254,7 @@ struct ClusterRowView: View {
                                 .scaleEffect(isHovered ? 1.1 : 1.0)
                                 .animation(.easeInOut(duration: 0.2), value: isHovered)
                         }
-                    } else if cluster.usesDexAuth {
+                    } else if cluster.usesDexAuth(using: settingsManager) {
                         HStack(spacing: 4) {
                             Text("Login Required")
                                 .font(.caption2)
@@ -313,9 +313,9 @@ struct ClusterRowView: View {
             NSLog("[K8sNN] Attempting to open terminal for context \(cluster.name)")
             let success = settingsManager.openTerminalWithContext(cluster.name)
             NSLog("[K8sNN] openTerminalWithContext returned: \(success)")
-        } else if cluster.usesDexAuth {
+        } else if cluster.usesDexAuth(using: settingsManager) {
             NSLog("[K8sNN] Opening login page for unauthenticated cluster \(cluster.name)")
-            kubernetesManager.openLoginPage(for: cluster)
+            kubernetesManager.openLoginPage(for: cluster, using: settingsManager)
         } else {
             NSLog("[K8sNN] Cluster not authenticated and no Dex auth; no action taken")
         }
@@ -324,7 +324,7 @@ struct ClusterRowView: View {
     private var helpText: String {
         if cluster.isAuthenticated {
             return "Click to open terminal with context '\(cluster.name)'"
-        } else if cluster.usesDexAuth {
+        } else if cluster.usesDexAuth(using: settingsManager) {
             return "Click to open login page"
         } else {
             return "Cluster not configured for authentication"

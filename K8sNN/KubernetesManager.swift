@@ -219,8 +219,8 @@ class KubernetesManager: ObservableObject {
         }
     }
     
-    func openLoginPage(for cluster: KubernetesCluster) {
-        guard let loginURL = cluster.loginURL,
+    func openLoginPage(for cluster: KubernetesCluster, using settingsManager: SettingsManager? = nil) {
+        guard let loginURL = cluster.loginURL(using: settingsManager),
               let url = URL(string: loginURL) else {
             print("[K8sNN] No login URL for cluster: \(cluster.name)")
             return

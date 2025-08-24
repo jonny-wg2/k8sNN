@@ -259,9 +259,9 @@ struct SpotlightOverlay: View {
             NSLog("[K8sNN] Attempting to open terminal for context \(cluster.name)")
             let ok = settingsManager.openTerminalWithContext(cluster.name)
             NSLog("[K8sNN] openTerminalWithContext returned: \(ok)")
-        } else if cluster.usesDexAuth {
+        } else if cluster.usesDexAuth(using: settingsManager) {
             NSLog("[K8sNN] Opening login page for unauthenticated cluster \(cluster.name)")
-            kubernetesManager.openLoginPage(for: cluster)
+            kubernetesManager.openLoginPage(for: cluster, using: settingsManager)
         } else {
             NSLog("[K8sNN] Cluster not authenticated and no Dex auth; no action taken")
         }
@@ -277,6 +277,7 @@ struct SpotlightClusterRow: View {
     let isSelected: Bool
     let onSelect: () -> Void
     @State private var isHovered = false
+    @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
         Button(action: onSelect) {
@@ -299,7 +300,7 @@ struct SpotlightClusterRow: View {
                         .foregroundStyle(.primary)
                         .lineLimit(1)
 
-                    if cluster.usesDexAuth {
+                    if cluster.usesDexAuth(using: settingsManager) {
                         Text(cluster.clusterName)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -339,7 +340,7 @@ struct SpotlightClusterRow: View {
                         .animation(.easeInOut(duration: 0.2), value: isHovered)
                         .animation(.easeInOut(duration: 0.2), value: isSelected)
 
-                    if cluster.usesDexAuth {
+                    if cluster.usesDexAuth(using: settingsManager) {
                         Image(systemName: "arrow.up.right.square.fill")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(.blue)

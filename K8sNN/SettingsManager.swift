@@ -8,6 +8,7 @@ class SettingsManager: ObservableObject {
     @Published var hotkey: String = "⌘⇧K"
     @Published var isHotkeyEnabled: Bool = true
     @Published var terminalApp: String = "iTerm"
+    @Published var customLoginURLs: [String: String] = [:]
 
     private let defaults = UserDefaults.standard
     private var hotkeyRef: EventHotKeyRef?
@@ -30,6 +31,12 @@ class SettingsManager: ObservableObject {
         hotkey = defaults.string(forKey: "hotkey") ?? "⌘⇧K"
         isHotkeyEnabled = defaults.bool(forKey: "isHotkeyEnabled")
         terminalApp = defaults.string(forKey: "terminalApp") ?? "iTerm"
+
+        // Load custom login URLs
+        if let urlData = defaults.data(forKey: "customLoginURLs"),
+           let urls = try? JSONDecoder().decode([String: String].self, from: urlData) {
+            customLoginURLs = urls
+        }
     }
     
     func saveSettings() {
@@ -40,6 +47,11 @@ class SettingsManager: ObservableObject {
         defaults.set(isHotkeyEnabled, forKey: "isHotkeyEnabled")
         defaults.set(terminalApp, forKey: "terminalApp")
 
+        // Save custom login URLs
+        if let urlData = try? JSONEncoder().encode(customLoginURLs) {
+            defaults.set(urlData, forKey: "customLoginURLs")
+        }
+
         // Only re-register hotkey if it actually changed
         if oldHotkey != hotkey || oldEnabled != isHotkeyEnabled {
             print("Hotkey settings changed, re-registering...")
@@ -49,7 +61,27 @@ class SettingsManager: ObservableObject {
             }
         }
     }
-    
+
+    // MARK: - Custom Login URL Management
+
+    func setCustomLoginURL(for clusterName: String, url: String) {
+        if url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            customLoginURLs.removeValue(forKey: clusterName)
+        } else {
+            customLoginURLs[clusterName] = url
+        }
+        saveSettings()
+    }
+
+    func getCustomLoginURL(for clusterName: String) -> String? {
+        return customLoginURLs[clusterName]
+    }
+
+    func removeCustomLoginURL(for clusterName: String) {
+        customLoginURLs.removeValue(forKey: clusterName)
+        saveSettings()
+    }
+
     private func setupHotkey() {
         guard isHotkeyEnabled else {
             print("Hotkey is disabled")
