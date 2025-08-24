@@ -16,6 +16,7 @@
 		A1234567890123456789014I /* SpotlightOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890123456789014J /* SpotlightOverlay.swift */; };
 		A1234567890123456789014K /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890123456789014L /* SettingsView.swift */; };
 		A1234567890123456789014M /* SettingsMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890123456789014N /* SettingsMenuView.swift */; };
+		A1234567890123456789014O /* SharedComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1234567890123456789014P /* SharedComponents.swift */; };
 		A1234567890123456789013E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1234567890123456789013F /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -30,6 +31,7 @@
 		A1234567890123456789014J /* SpotlightOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightOverlay.swift; sourceTree = "<group>"; };
 		A1234567890123456789014L /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A1234567890123456789014N /* SettingsMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsMenuView.swift; sourceTree = "<group>"; };
+		A1234567890123456789014P /* SharedComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedComponents.swift; sourceTree = "<group>"; };
 		A1234567890123456789013F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1234567890123456789014A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -54,6 +56,7 @@
 				A1234567890123456789014J /* SpotlightOverlay.swift */,
 				A1234567890123456789014L /* SettingsView.swift */,
 				A1234567890123456789014N /* SettingsMenuView.swift */,
+				A1234567890123456789014P /* SharedComponents.swift */,
 				A1234567890123456789012F /* KubernetesManager.swift */,
 				A1234567890123456789014H /* SettingsManager.swift */,
 				A1234567890123456789013B /* ClusterModel.swift */,
@@ -157,6 +160,7 @@
 				A1234567890123456789014I /* SpotlightOverlay.swift in Sources */,
 				A1234567890123456789014K /* SettingsView.swift in Sources */,
 				A1234567890123456789014M /* SettingsMenuView.swift in Sources */,
+				A1234567890123456789014O /* SharedComponents.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

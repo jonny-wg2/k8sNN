@@ -20,12 +20,11 @@ struct SettingsMenuView: View {
 
                 Spacer()
 
-                Button(action: onClose) {
+                GlassButton(action: onClose) {
                     Image(systemName: "xmark")
                         .foregroundStyle(.secondary)
                         .font(.system(size: 14, weight: .medium))
                 }
-                .buttonStyle(PlainButtonStyle())
                 .help("Close settings")
             }
             .padding(.horizontal, 16)
@@ -52,35 +51,17 @@ struct SettingsMenuView: View {
                                     settingsManager.saveSettings()
                                 }
                             
-                            Button(action: {
-                                if isRecordingHotkey {
-                                    stopRecording()
-                                } else {
-                                    startRecording()
-                                }
-                            }) {
-                                HStack(spacing: 8) {
+                            HotkeyRecordButton(
+                                isRecording: isRecordingHotkey,
+                                hotkey: settingsManager.hotkey,
+                                action: {
                                     if isRecordingHotkey {
-                                        Text("Press keys...")
-                                            .foregroundStyle(.orange)
+                                        stopRecording()
                                     } else {
-                                        Text(settingsManager.hotkey)
-                                            .fontWeight(.medium)
-                                            .foregroundStyle(.primary)
+                                        startRecording()
                                     }
                                 }
-                                .frame(maxWidth: .infinity)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(isRecordingHotkey ? .orange.opacity(0.1) : .secondary.opacity(0.1))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .stroke(isRecordingHotkey ? .orange : .secondary.opacity(0.3), lineWidth: 1)
-                                )
-                            }
+                            )
                             .buttonStyle(.plain)
                             .disabled(!settingsManager.isHotkeyEnabled)
                             
@@ -203,6 +184,68 @@ struct SettingsMenuView: View {
                     stopRecording()
                 }
             }
+        }
+    }
+}
+
+// MARK: - Hotkey Record Button Component
+struct HotkeyRecordButton: View {
+    let isRecording: Bool
+    let hotkey: String
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if isRecording {
+                    Text("Press keys...")
+                        .foregroundStyle(.orange)
+                } else {
+                    Text(hotkey)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.primary)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(backgroundFill)
+                    .animation(.easeInOut(duration: 0.2), value: isHovered)
+                    .animation(.easeInOut(duration: 0.2), value: isRecording)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(borderStroke, lineWidth: 1)
+                    .animation(.easeInOut(duration: 0.2), value: isHovered)
+                    .animation(.easeInOut(duration: 0.2), value: isRecording)
+            )
+            .scaleEffect(isHovered ? 1.02 : 1.0)
+            .animation(.easeInOut(duration: 0.2), value: isHovered)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isHovered = hovering
+            }
+        }
+    }
+
+    private var backgroundFill: Color {
+        if isRecording {
+            return .orange.opacity(isHovered ? 0.15 : 0.1)
+        } else {
+            return .secondary.opacity(isHovered ? 0.15 : 0.1)
+        }
+    }
+
+    private var borderStroke: Color {
+        if isRecording {
+            return .orange.opacity(isHovered ? 0.8 : 0.6)
+        } else {
+            return .secondary.opacity(isHovered ? 0.5 : 0.3)
         }
     }
 }

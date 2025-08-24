@@ -108,6 +108,7 @@ struct SpotlightOverlay: View {
     @State private var searchText = ""
     @State private var selectedIndex = 0
     @FocusState private var isSearchFocused: Bool
+    @State private var isSearchBarHovered = false
 
     var filteredClusters: [KubernetesCluster] {
         let all = kubernetesManager.clusters
@@ -137,19 +138,31 @@ struct SpotlightOverlay: View {
                     }
 
                 if !searchText.isEmpty {
-                    Button(action: {
+                    CompactGlassButton(action: {
                         searchText = ""
                         selectedIndex = 0
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(searchBarBorderColor, lineWidth: 1)
+                    .animation(.easeInOut(duration: 0.2), value: isSearchBarHovered)
+                    .animation(.easeInOut(duration: 0.2), value: isSearchFocused)
+            )
+            .scaleEffect(isSearchBarHovered ? 1.005 : 1.0)
+            .animation(.easeInOut(duration: 0.2), value: isSearchBarHovered)
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isSearchBarHovered = hovering
+                }
+            }
 
             if !filteredClusters.isEmpty {
                 // Results list
@@ -222,6 +235,17 @@ struct SpotlightOverlay: View {
         }
     }
 
+    // Computed property for search bar border color
+    private var searchBarBorderColor: Color {
+        if isSearchFocused {
+            return .blue.opacity(0.4)
+        } else if isSearchBarHovered {
+            return .blue.opacity(0.2)
+        } else {
+            return .clear
+        }
+    }
+
     private func authenticateSelectedCluster() {
         NSLog("[K8sNN] authenticateSelectedCluster() called")
         guard selectedIndex < filteredClusters.count else {
@@ -252,19 +276,22 @@ struct SpotlightClusterRow: View {
     let cluster: KubernetesCluster
     let isSelected: Bool
     let onSelect: () -> Void
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 14) {
-                // Status indicator
+                // Status indicator with enhanced glow on hover
                 Circle()
                     .fill(cluster.isAuthenticated ? Color.green : Color.red)
                     .frame(width: 10, height: 10)
                     .shadow(
                         color: cluster.isAuthenticated ? .green.opacity(0.4) : .red.opacity(0.4),
-                        radius: 3,
+                        radius: (isSelected || isHovered) ? 4 : 3,
                         x: 0, y: 0
                     )
+                    .animation(.easeInOut(duration: 0.2), value: isHovered)
+                    .animation(.easeInOut(duration: 0.2), value: isSelected)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(cluster.name)
@@ -287,26 +314,38 @@ struct SpotlightClusterRow: View {
 
                 Spacer()
 
-                // Status text and action
+                // Status text and action with hover effects
                 if cluster.isAuthenticated {
                     Text("Open Terminal")
                         .font(.caption)
                         .foregroundStyle(.blue)
                         .fontWeight(.medium)
+                        .opacity((isSelected || isHovered) ? 1.0 : 0.8)
+                        .animation(.easeInOut(duration: 0.2), value: isHovered)
+                        .animation(.easeInOut(duration: 0.2), value: isSelected)
 
                     Image(systemName: "terminal.fill")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.blue)
+                        .scaleEffect((isSelected || isHovered) ? 1.1 : 1.0)
+                        .animation(.easeInOut(duration: 0.2), value: isHovered)
+                        .animation(.easeInOut(duration: 0.2), value: isSelected)
                 } else {
                     Text("Login Required")
                         .font(.caption)
                         .foregroundStyle(.orange)
                         .fontWeight(.medium)
+                        .opacity((isSelected || isHovered) ? 1.0 : 0.8)
+                        .animation(.easeInOut(duration: 0.2), value: isHovered)
+                        .animation(.easeInOut(duration: 0.2), value: isSelected)
 
                     if cluster.usesDexAuth {
                         Image(systemName: "arrow.up.right.square.fill")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(.blue)
+                            .scaleEffect((isSelected || isHovered) ? 1.1 : 1.0)
+                            .animation(.easeInOut(duration: 0.2), value: isHovered)
+                            .animation(.easeInOut(duration: 0.2), value: isSelected)
                     }
                 }
             }
@@ -314,15 +353,45 @@ struct SpotlightClusterRow: View {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? .blue.opacity(0.15) : .clear)
+                    .fill(backgroundFill)
+                    .animation(.easeInOut(duration: 0.2), value: isHovered)
+                    .animation(.easeInOut(duration: 0.2), value: isSelected)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? .blue.opacity(0.3) : .clear, lineWidth: 1)
+                    .stroke(borderStroke, lineWidth: 1)
+                    .animation(.easeInOut(duration: 0.2), value: isHovered)
+                    .animation(.easeInOut(duration: 0.2), value: isSelected)
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isHovered = hovering
+            }
+        }
+    }
+
+    // Computed properties for elegant glass hover effects
+    private var backgroundFill: Color {
+        if isSelected {
+            return .blue.opacity(0.15)
+        } else if isHovered {
+            return .blue.opacity(0.08)
+        } else {
+            return .clear
+        }
+    }
+
+    private var borderStroke: Color {
+        if isSelected {
+            return .blue.opacity(0.3)
+        } else if isHovered {
+            return .blue.opacity(0.2)
+        } else {
+            return .clear
+        }
     }
 }
 

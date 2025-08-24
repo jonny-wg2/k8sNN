@@ -15,6 +15,26 @@ A beautiful macOS menubar app that monitors the authentication status of your Ku
 
 **📥 [Download the latest release](https://github.com/jonny-wg2/k8sNN/releases/latest)**
 
+### Quick Install (Command Line)
+
+```bash
+# Download and install the latest release
+curl -s https://api.github.com/repos/jonny-wg2/k8sNN/releases/latest \
+  | grep "browser_download_url.*K8sNN.zip" \
+  | cut -d '"' -f 4 \
+  | xargs curl -L -o K8sNN.zip
+
+# Extract and install
+unzip K8sNN.zip
+mv K8sNN.app /Applications/
+rm K8sNN.zip
+
+# Launch the app
+open /Applications/K8sNN.app
+```
+
+### Manual Download
+
 Choose from:
 
 - **K8sNN.dmg** - Easy installer with drag-and-drop setup

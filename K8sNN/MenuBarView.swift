@@ -49,14 +49,13 @@ struct MenuBarView: View {
 
                 Spacer()
 
-                Button(action: {
+                GlassButton(action: {
                     kubernetesManager.refreshClusters()
                 }) {
                     Image(systemName: "arrow.clockwise")
                         .foregroundStyle(.secondary)
                         .font(.system(size: 14, weight: .medium))
                 }
-                .buttonStyle(PlainButtonStyle())
                 .help("Refresh clusters")
             }
             .padding(.horizontal, 16)
@@ -118,6 +117,7 @@ struct MenuBarView: View {
                         ForEach(kubernetesManager.clusters) { cluster in
                             ClusterRowView(cluster: cluster)
                                 .environmentObject(kubernetesManager)
+                                .environmentObject(settingsManager)
                         }
                     }
                     .padding(.vertical, 4)
@@ -167,20 +167,18 @@ struct MenuBarView: View {
                     .help("Unauthenticated clusters")
                 }
 
-                Button("Settings") {
+                GlassButton("Settings") {
                     withAnimation {
                         showingSettings.toggle()
                     }
                 }
-                .buttonStyle(PlainButtonStyle())
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fontWeight(.medium)
 
-                Button("Quit") {
+                GlassButton("Quit") {
                     NSApplication.shared.terminate(nil)
                 }
-                .buttonStyle(PlainButtonStyle())
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fontWeight(.medium)
@@ -195,13 +193,12 @@ struct MenuBarView: View {
 struct ClusterRowView: View {
     let cluster: KubernetesCluster
     @EnvironmentObject var kubernetesManager: KubernetesManager
+    @EnvironmentObject var settingsManager: SettingsManager
     @State private var isHovered = false
 
     var body: some View {
         Button(action: {
-            if !cluster.isAuthenticated && cluster.usesDexAuth {
-                kubernetesManager.openLoginPage(for: cluster)
-            }
+            handleClusterAction()
         }) {
             HStack(spacing: 14) {
                 // Status indicator with glow effect
@@ -236,8 +233,29 @@ struct ClusterRowView: View {
 
                 Spacer()
 
-                // Action indicator
-                if !cluster.isAuthenticated && cluster.usesDexAuth {
+                // Action indicator and status
+                if cluster.isAuthenticated {
+                    Text("Open Terminal")
+                        .font(.caption2)
+                        .foregroundStyle(.blue)
+                        .fontWeight(.medium)
+                        .opacity(isHovered ? 1.0 : 0.8)
+                        .animation(.easeInOut(duration: 0.2), value: isHovered)
+
+                    Image(systemName: "terminal.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.blue)
+                        .opacity(isHovered ? 1.0 : 0.7)
+                        .scaleEffect(isHovered ? 1.1 : 1.0)
+                        .animation(.easeInOut(duration: 0.2), value: isHovered)
+                } else if cluster.usesDexAuth {
+                    Text("Login Required")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                        .fontWeight(.medium)
+                        .opacity(isHovered ? 1.0 : 0.8)
+                        .animation(.easeInOut(duration: 0.2), value: isHovered)
+
                     Image(systemName: "arrow.up.right.square.fill")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.blue)
@@ -262,6 +280,13 @@ struct ClusterRowView: View {
                     .fill(isHovered ? .blue.opacity(0.08) : .clear)
                     .animation(.easeInOut(duration: 0.2), value: isHovered)
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isHovered ? .blue.opacity(0.15) : .clear, lineWidth: 0.5)
+                    .animation(.easeInOut(duration: 0.2), value: isHovered)
+            )
+            .scaleEffect(isHovered ? 1.01 : 1.0)
+            .animation(.easeInOut(duration: 0.2), value: isHovered)
             .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
@@ -270,9 +295,34 @@ struct ClusterRowView: View {
                 isHovered = hovering
             }
         }
-        .help(cluster.usesDexAuth && !cluster.isAuthenticated ? "Click to open login page" : "")
+        .help(helpText)
     }
-    
+
+    private func handleClusterAction() {
+        NSLog("[K8sNN] MenuBar cluster action: name=\(cluster.name), isAuthenticated=\(cluster.isAuthenticated), usesDexAuth=\(cluster.usesDexAuth)")
+
+        if cluster.isAuthenticated {
+            NSLog("[K8sNN] Attempting to open terminal for context \(cluster.name)")
+            let success = settingsManager.openTerminalWithContext(cluster.name)
+            NSLog("[K8sNN] openTerminalWithContext returned: \(success)")
+        } else if cluster.usesDexAuth {
+            NSLog("[K8sNN] Opening login page for unauthenticated cluster \(cluster.name)")
+            kubernetesManager.openLoginPage(for: cluster)
+        } else {
+            NSLog("[K8sNN] Cluster not authenticated and no Dex auth; no action taken")
+        }
+    }
+
+    private var helpText: String {
+        if cluster.isAuthenticated {
+            return "Click to open terminal with context '\(cluster.name)'"
+        } else if cluster.usesDexAuth {
+            return "Click to open login page"
+        } else {
+            return "Cluster not configured for authentication"
+        }
+    }
+
     private func timeAgoString(from date: Date) -> String {
         let interval = Date().timeIntervalSince(date)
         
