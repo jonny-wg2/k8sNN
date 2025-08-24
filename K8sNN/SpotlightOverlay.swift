@@ -111,7 +111,7 @@ struct SpotlightOverlay: View {
     @State private var isSearchBarHovered = false
 
     var filteredClusters: [KubernetesCluster] {
-        let all = kubernetesManager.clusters
+        let all = kubernetesManager.sortedClusters(using: settingsManager.clusterSortOrder)
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if query.isEmpty { return all }
 
@@ -253,10 +253,17 @@ struct SpotlightOverlay: View {
             return
         }
         let cluster = filteredClusters[selectedIndex]
-        let actionType = cluster.actionType(using: settingsManager)
-        NSLog("[K8sNN] Spotlight selected cluster: name=\(cluster.name), actionType=\(actionType)")
 
-        switch actionType {
+        // Check for option key modifier
+        let useSecondary = NSEvent.modifierFlags.contains(.option)
+        let primaryAction = cluster.primaryActionType(using: settingsManager)
+        let secondaryAction = cluster.secondaryActionType(using: settingsManager)
+
+        let actionToExecute = useSecondary ? (secondaryAction ?? primaryAction) : primaryAction
+
+        NSLog("[K8sNN] Spotlight selected cluster: name=\(cluster.name), actionType=\(actionToExecute), useSecondary=\(useSecondary)")
+
+        switch actionToExecute {
         case .openTerminal:
             NSLog("[K8sNN] Attempting to open terminal for context \(cluster.name)")
             let ok = settingsManager.openTerminalWithContext(cluster.name)
@@ -327,65 +334,101 @@ struct SpotlightClusterRow: View {
                 Spacer()
 
                 // Status text and action with hover effects
-                let actionType = cluster.actionType(using: settingsManager)
+                VStack(alignment: .trailing, spacing: 2) {
+                    let primaryAction = cluster.primaryActionType(using: settingsManager)
+                    let hasSecondary = cluster.hasSecondaryAction(using: settingsManager)
 
-                switch actionType {
-                case .openTerminal:
-                    Text("Open Terminal")
-                        .font(.caption)
-                        .foregroundStyle(.blue)
-                        .fontWeight(.medium)
-                        .opacity((isSelected || isHovered) ? 1.0 : 0.8)
-                        .animation(.easeInOut(duration: 0.2), value: isHovered)
-                        .animation(.easeInOut(duration: 0.2), value: isSelected)
+                    // Primary action
+                    HStack(spacing: 4) {
+                        switch primaryAction {
+                        case .openTerminal:
+                            Text("Open Terminal")
+                                .font(.caption)
+                                .foregroundStyle(.blue)
+                                .fontWeight(.medium)
+                                .opacity((isSelected || isHovered) ? 1.0 : 0.8)
+                                .animation(.easeInOut(duration: 0.2), value: isHovered)
+                                .animation(.easeInOut(duration: 0.2), value: isSelected)
 
-                    Image(systemName: "terminal.fill")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.blue)
-                        .scaleEffect((isSelected || isHovered) ? 1.1 : 1.0)
-                        .animation(.easeInOut(duration: 0.2), value: isHovered)
-                        .animation(.easeInOut(duration: 0.2), value: isSelected)
+                            Image(systemName: "terminal.fill")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.blue)
+                                .scaleEffect((isSelected || isHovered) ? 1.1 : 1.0)
+                                .animation(.easeInOut(duration: 0.2), value: isHovered)
+                                .animation(.easeInOut(duration: 0.2), value: isSelected)
 
-                case .runCommand:
-                    Text("Run Command")
-                        .font(.caption)
-                        .foregroundStyle(.purple)
-                        .fontWeight(.medium)
-                        .opacity((isSelected || isHovered) ? 1.0 : 0.8)
-                        .animation(.easeInOut(duration: 0.2), value: isHovered)
-                        .animation(.easeInOut(duration: 0.2), value: isSelected)
+                        case .runCommand:
+                            Text("Run Command")
+                                .font(.caption)
+                                .foregroundStyle(.purple)
+                                .fontWeight(.medium)
+                                .opacity((isSelected || isHovered) ? 1.0 : 0.8)
+                                .animation(.easeInOut(duration: 0.2), value: isHovered)
+                                .animation(.easeInOut(duration: 0.2), value: isSelected)
 
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.purple)
-                        .scaleEffect((isSelected || isHovered) ? 1.1 : 1.0)
-                        .animation(.easeInOut(duration: 0.2), value: isHovered)
-                        .animation(.easeInOut(duration: 0.2), value: isSelected)
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.purple)
+                                .scaleEffect((isSelected || isHovered) ? 1.1 : 1.0)
+                                .animation(.easeInOut(duration: 0.2), value: isHovered)
+                                .animation(.easeInOut(duration: 0.2), value: isSelected)
 
-                case .openLoginURL:
-                    Text("Login Required")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .fontWeight(.medium)
-                        .opacity((isSelected || isHovered) ? 1.0 : 0.8)
-                        .animation(.easeInOut(duration: 0.2), value: isHovered)
-                        .animation(.easeInOut(duration: 0.2), value: isSelected)
+                        case .openLoginURL:
+                            Text("Login Required")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                                .fontWeight(.medium)
+                                .opacity((isSelected || isHovered) ? 1.0 : 0.8)
+                                .animation(.easeInOut(duration: 0.2), value: isHovered)
+                                .animation(.easeInOut(duration: 0.2), value: isSelected)
 
-                    Image(systemName: "arrow.up.right.square.fill")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.blue)
-                        .scaleEffect((isSelected || isHovered) ? 1.1 : 1.0)
-                        .animation(.easeInOut(duration: 0.2), value: isHovered)
-                        .animation(.easeInOut(duration: 0.2), value: isSelected)
+                            Image(systemName: "arrow.up.right.square.fill")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.blue)
+                                .scaleEffect((isSelected || isHovered) ? 1.1 : 1.0)
+                                .animation(.easeInOut(duration: 0.2), value: isHovered)
+                                .animation(.easeInOut(duration: 0.2), value: isSelected)
 
-                case .none:
-                    Text("No Action")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fontWeight(.medium)
-                        .opacity((isSelected || isHovered) ? 1.0 : 0.8)
-                        .animation(.easeInOut(duration: 0.2), value: isHovered)
-                        .animation(.easeInOut(duration: 0.2), value: isSelected)
+                        case .none:
+                            Text("No Action")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fontWeight(.medium)
+                                .opacity((isSelected || isHovered) ? 1.0 : 0.8)
+                                .animation(.easeInOut(duration: 0.2), value: isHovered)
+                                .animation(.easeInOut(duration: 0.2), value: isSelected)
+                        }
+                    }
+
+                    // Secondary action indicator
+                    if hasSecondary {
+                        if let secondaryAction = cluster.secondaryActionType(using: settingsManager) {
+                            HStack(spacing: 4) {
+                                switch secondaryAction {
+                                case .runCommand:
+                                    Text("⌥ Run Command")
+                                        .font(.caption2)
+                                        .foregroundStyle(.purple.opacity(0.7))
+                                        .fontWeight(.medium)
+                                        .opacity((isSelected || isHovered) ? 1.0 : 0.6)
+                                        .animation(.easeInOut(duration: 0.2), value: isHovered)
+                                        .animation(.easeInOut(duration: 0.2), value: isSelected)
+
+                                case .openLoginURL:
+                                    Text("⌥ Open Login")
+                                        .font(.caption2)
+                                        .foregroundStyle(.orange.opacity(0.7))
+                                        .fontWeight(.medium)
+                                        .opacity((isSelected || isHovered) ? 1.0 : 0.6)
+                                        .animation(.easeInOut(duration: 0.2), value: isHovered)
+                                        .animation(.easeInOut(duration: 0.2), value: isSelected)
+
+                                default:
+                                    EmptyView()
+                                }
+                            }
+                        }
+                    }
                 }
             }
             .padding(.horizontal, 16)

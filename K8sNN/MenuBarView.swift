@@ -21,7 +21,7 @@ struct MenuBarView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: showingSettings)
-        .frame(width: 420)
+        .frame(width: settingsManager.menuBarWidth, height: settingsManager.menuBarHeight)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
@@ -114,7 +114,7 @@ struct MenuBarView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 1) {
-                        ForEach(kubernetesManager.clusters) { cluster in
+                        ForEach(kubernetesManager.sortedClusters(using: settingsManager.clusterSortOrder)) { cluster in
                             ClusterRowView(cluster: cluster)
                                 .environmentObject(kubernetesManager)
                                 .environmentObject(settingsManager)
@@ -122,7 +122,7 @@ struct MenuBarView: View {
                     }
                     .padding(.vertical, 4)
                 }
-                .frame(maxHeight: 400)
+
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 0))
             }
             
@@ -198,7 +198,7 @@ struct ClusterRowView: View {
 
     var body: some View {
         Button(action: {
-            handleClusterAction()
+            handleClusterAction(useSecondary: false)
         }) {
             HStack(spacing: 14) {
                 // Status indicator with glow effect
@@ -238,9 +238,10 @@ struct ClusterRowView: View {
 
                 // Action indicator and status - more compact layout
                 VStack(alignment: .trailing, spacing: 2) {
-                    let actionType = cluster.actionType(using: settingsManager)
+                    let primaryAction = cluster.primaryActionType(using: settingsManager)
+                    let hasSecondary = cluster.hasSecondaryAction(using: settingsManager)
 
-                    switch actionType {
+                    switch primaryAction {
                     case .openTerminal:
                         HStack(spacing: 4) {
                             Text("Open Terminal")
@@ -260,7 +261,7 @@ struct ClusterRowView: View {
 
                     case .runCommand:
                         HStack(spacing: 4) {
-                            Text("Run Command")
+                            Text(hasSecondary ? "Run Command" : "Run Command")
                                 .font(.caption2)
                                 .foregroundStyle(.purple)
                                 .fontWeight(.medium)
@@ -277,7 +278,7 @@ struct ClusterRowView: View {
 
                     case .openLoginURL:
                         HStack(spacing: 4) {
-                            Text("Login Required")
+                            Text(hasSecondary ? "Login Required" : "Login Required")
                                 .font(.caption2)
                                 .foregroundStyle(.orange)
                                 .fontWeight(.medium)
@@ -296,11 +297,39 @@ struct ClusterRowView: View {
                         EmptyView()
                     }
 
+                    // Show secondary action indicator if available
+                    if hasSecondary {
+                        if let secondaryAction = cluster.secondaryActionType(using: settingsManager) {
+                            HStack(spacing: 4) {
+                                switch secondaryAction {
+                                case .runCommand:
+                                    Text("⌥ Run Command")
+                                        .font(.caption2)
+                                        .foregroundStyle(.purple.opacity(0.7))
+                                        .fontWeight(.medium)
+                                        .opacity(isHovered ? 1.0 : 0.6)
+                                        .animation(.easeInOut(duration: 0.2), value: isHovered)
+
+                                case .openLoginURL:
+                                    Text("⌥ Open Login")
+                                        .font(.caption2)
+                                        .foregroundStyle(.orange.opacity(0.7))
+                                        .fontWeight(.medium)
+                                        .opacity(isHovered ? 1.0 : 0.6)
+                                        .animation(.easeInOut(duration: 0.2), value: isHovered)
+
+                                default:
+                                    EmptyView()
+                                }
+                            }
+                        }
+                    }
+
                     // Last checked time
                     if cluster.lastChecked != Date(timeIntervalSince1970: 0) {
                         Text(timeAgoString(from: cluster.lastChecked))
                             .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary)
                             .fontWeight(.medium)
                     }
                 }
@@ -327,14 +356,25 @@ struct ClusterRowView: View {
                 isHovered = hovering
             }
         }
+        .simultaneousGesture(
+            TapGesture()
+                .modifiers(.option)
+                .onEnded { _ in
+                    handleClusterAction(useSecondary: true)
+                }
+        )
         .help(helpText)
     }
 
-    private func handleClusterAction() {
-        let actionType = cluster.actionType(using: settingsManager)
-        NSLog("[K8sNN] MenuBar cluster action: name=\(cluster.name), actionType=\(actionType)")
+    private func handleClusterAction(useSecondary: Bool = false) {
+        let primaryAction = cluster.primaryActionType(using: settingsManager)
+        let secondaryAction = cluster.secondaryActionType(using: settingsManager)
 
-        switch actionType {
+        let actionToExecute = useSecondary ? (secondaryAction ?? primaryAction) : primaryAction
+
+        NSLog("[K8sNN] MenuBar cluster action: name=\(cluster.name), actionType=\(actionToExecute), useSecondary=\(useSecondary)")
+
+        switch actionToExecute {
         case .openTerminal:
             NSLog("[K8sNN] Attempting to open terminal for context \(cluster.name)")
             let success = settingsManager.openTerminalWithContext(cluster.name)
@@ -357,17 +397,35 @@ struct ClusterRowView: View {
     }
 
     private var helpText: String {
-        let actionType = cluster.actionType(using: settingsManager)
-        switch actionType {
+        let primaryAction = cluster.primaryActionType(using: settingsManager)
+        let hasSecondary = cluster.hasSecondaryAction(using: settingsManager)
+
+        var text = ""
+        switch primaryAction {
         case .openTerminal:
-            return "Click to open terminal with context '\(cluster.name)'"
+            text = "Click to open terminal with context '\(cluster.name)'"
         case .runCommand:
-            return "Click to run custom command"
+            text = "Click to run custom command"
         case .openLoginURL:
-            return "Click to open login page"
+            text = "Click to open login page"
         case .none:
-            return "No action configured for this cluster"
+            text = "No action configured for this cluster"
         }
+
+        if hasSecondary {
+            if let secondaryAction = cluster.secondaryActionType(using: settingsManager) {
+                switch secondaryAction {
+                case .runCommand:
+                    text += " • Option+Click to run command"
+                case .openLoginURL:
+                    text += " • Option+Click to open login page"
+                default:
+                    break
+                }
+            }
+        }
+
+        return text
     }
 
     private func timeAgoString(from date: Date) -> String {

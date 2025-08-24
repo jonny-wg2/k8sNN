@@ -4,12 +4,29 @@ import AppKit
 import Carbon
 import ApplicationServices
 
+enum ClusterSortOrder: String, CaseIterable {
+    case connectedFirst = "connected_first"
+    case alphabetical = "alphabetical"
+
+    var displayName: String {
+        switch self {
+        case .connectedFirst:
+            return "Connected First"
+        case .alphabetical:
+            return "Alphabetical"
+        }
+    }
+}
+
 class SettingsManager: ObservableObject {
     @Published var hotkey: String = "⌘⇧K"
     @Published var isHotkeyEnabled: Bool = true
     @Published var terminalApp: String = "iTerm"
     @Published var customLoginURLs: [String: String] = [:]
     @Published var customCommands: [String: String] = [:]
+    @Published var clusterSortOrder: ClusterSortOrder = .connectedFirst
+    @Published var menuBarWidth: Double = 420.0
+    @Published var menuBarHeight: Double = 500.0
 
     private let defaults = UserDefaults.standard
     private var hotkeyRef: EventHotKeyRef?
@@ -44,6 +61,24 @@ class SettingsManager: ObservableObject {
            let commands = try? JSONDecoder().decode([String: String].self, from: commandData) {
             customCommands = commands
         }
+
+        // Load cluster sort order
+        if let sortOrderString = defaults.string(forKey: "clusterSortOrder"),
+           let sortOrder = ClusterSortOrder(rawValue: sortOrderString) {
+            clusterSortOrder = sortOrder
+        }
+
+        // Load menu bar width
+        let savedWidth = defaults.double(forKey: "menuBarWidth")
+        if savedWidth > 0 {
+            menuBarWidth = savedWidth
+        }
+
+        // Load menu bar height
+        let savedHeight = defaults.double(forKey: "menuBarHeight")
+        if savedHeight > 0 {
+            menuBarHeight = savedHeight
+        }
     }
     
     func saveSettings() {
@@ -63,6 +98,15 @@ class SettingsManager: ObservableObject {
         if let commandData = try? JSONEncoder().encode(customCommands) {
             defaults.set(commandData, forKey: "customCommands")
         }
+
+        // Save cluster sort order
+        defaults.set(clusterSortOrder.rawValue, forKey: "clusterSortOrder")
+
+        // Save menu bar width
+        defaults.set(menuBarWidth, forKey: "menuBarWidth")
+
+        // Save menu bar height
+        defaults.set(menuBarHeight, forKey: "menuBarHeight")
 
         // Only re-register hotkey if it actually changed
         if oldHotkey != hotkey || oldEnabled != isHotkeyEnabled {

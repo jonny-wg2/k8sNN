@@ -102,8 +102,8 @@ struct KubernetesCluster: Identifiable, Codable {
         return loginURL(using: settingsManager) != nil
     }
 
-    // Determine the action type for this cluster
-    func actionType(using settingsManager: SettingsManager?) -> ClusterActionType {
+    // Determine the primary action type for this cluster
+    func primaryActionType(using settingsManager: SettingsManager?) -> ClusterActionType {
         if isAuthenticated {
             return .openTerminal
         } else if let settingsManager = settingsManager,
@@ -114,6 +114,38 @@ struct KubernetesCluster: Identifiable, Codable {
         } else {
             return .none
         }
+    }
+
+    // Check if cluster has a secondary action available
+    func hasSecondaryAction(using settingsManager: SettingsManager?) -> Bool {
+        guard let settingsManager = settingsManager else { return false }
+
+        let hasCommand = settingsManager.getCustomCommand(for: name) != nil
+        let hasLoginURL = usesDexAuth(using: settingsManager)
+
+        // Secondary action exists if both command and login URL are available
+        return hasCommand && hasLoginURL
+    }
+
+    // Get the secondary action type
+    func secondaryActionType(using settingsManager: SettingsManager?) -> ClusterActionType? {
+        guard hasSecondaryAction(using: settingsManager) else { return nil }
+
+        // If primary is command, secondary is login URL
+        if primaryActionType(using: settingsManager) == .runCommand {
+            return .openLoginURL
+        }
+        // If primary is login URL, secondary is command
+        else if primaryActionType(using: settingsManager) == .openLoginURL {
+            return .runCommand
+        }
+
+        return nil
+    }
+
+    // Legacy method for backward compatibility
+    func actionType(using settingsManager: SettingsManager?) -> ClusterActionType {
+        return primaryActionType(using: settingsManager)
     }
 }
 

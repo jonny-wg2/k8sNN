@@ -21,11 +21,16 @@ struct SettingsMenuView: View {
                 Spacer()
 
                 GlassButton(action: onClose) {
-                    Image(systemName: "xmark")
-                        .foregroundStyle(.secondary)
-                        .font(.system(size: 14, weight: .medium))
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 12, weight: .medium))
+                        Text("Back")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundStyle(.secondary)
                 }
-                .help("Close settings")
+                .help("Back to main menu")
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -91,6 +96,34 @@ struct SettingsMenuView: View {
                         }
                         .pickerStyle(.segmented)
                         .onChange(of: settingsManager.terminalApp) { _, _ in
+                            settingsManager.saveSettings()
+                        }
+                    }
+
+                    Divider()
+
+                    // Menu Bar Size Settings
+                    MenuBarSizeSettings()
+
+                    Divider()
+
+                    // Cluster Sorting Settings
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Cluster Sorting")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+
+                        Text("Choose how clusters are ordered in the menu and spotlight")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Picker("Sort Order", selection: $settingsManager.clusterSortOrder) {
+                            ForEach(ClusterSortOrder.allCases, id: \.self) { sortOrder in
+                                Text(sortOrder.displayName).tag(sortOrder)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .onChange(of: settingsManager.clusterSortOrder) { _, _ in
                             settingsManager.saveSettings()
                         }
                     }
@@ -278,7 +311,7 @@ struct CustomLoginURLsSection: View {
                     .padding(.vertical, 8)
             } else {
                 VStack(spacing: 8) {
-                    ForEach(kubernetesManager.clusters) { cluster in
+                    ForEach(kubernetesManager.sortedClusters(using: settingsManager.clusterSortOrder)) { cluster in
                         ClusterLoginURLRow(cluster: cluster)
                     }
                 }
@@ -335,8 +368,8 @@ struct ClusterLoginURLRow: View {
                 }
             }
 
-            // URL input field
-            if cluster.usesDexAuth(using: settingsManager) || settingsManager.getCustomLoginURL(for: cluster.name) != nil {
+            // URL input field - always show for all clusters
+            if true { // Always show login URL option
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Login URL")
                         .font(.caption2)
@@ -456,6 +489,102 @@ struct ClusterLoginURLRow: View {
         let trimmedCommand = editedCommand.trimmingCharacters(in: .whitespacesAndNewlines)
         settingsManager.setCustomCommand(for: cluster.name, command: trimmedCommand)
         isEditingCommand = false
+    }
+}
+
+// MARK: - Menu Bar Size Settings
+struct MenuBarSizeSettings: View {
+    @EnvironmentObject var settingsManager: SettingsManager
+    @State private var showSavedNotification = false
+    @State private var notificationTimer: Timer?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Menu Bar Size")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+
+            Text("Adjust the width and height of the menu bar popup")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 12) {
+                // Width controls
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Width: \(Int(settingsManager.menuBarWidth))px")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fontWeight(.medium)
+
+                        Spacer()
+
+                        if showSavedNotification {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.green)
+                                Text("Saved")
+                                    .font(.caption2)
+                                    .foregroundStyle(.green)
+                                    .fontWeight(.medium)
+                            }
+                            .transition(.opacity.combined(with: .scale))
+                        }
+
+                        Button("Reset") {
+                            settingsManager.menuBarWidth = 420.0
+                            settingsManager.menuBarHeight = 500.0
+                            settingsManager.saveSettings()
+                            showSaveNotification()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                    }
+
+                    Slider(value: $settingsManager.menuBarWidth, in: 300...600, step: 10)
+                        .onChange(of: settingsManager.menuBarWidth) { _, _ in
+                            settingsManager.saveSettings()
+                            showSaveNotification()
+                        }
+                }
+
+                // Height controls
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Height: \(Int(settingsManager.menuBarHeight))px")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fontWeight(.medium)
+
+                        Spacer()
+                    }
+
+                    Slider(value: $settingsManager.menuBarHeight, in: 300...800, step: 10)
+                        .onChange(of: settingsManager.menuBarHeight) { _, _ in
+                            settingsManager.saveSettings()
+                            showSaveNotification()
+                        }
+                }
+            }
+        }
+    }
+
+    private func showSaveNotification() {
+        // Cancel existing timer
+        notificationTimer?.invalidate()
+
+        // Show notification with animation
+        withAnimation(.easeInOut(duration: 0.3)) {
+            showSavedNotification = true
+        }
+
+        // Hide after 2 seconds
+        notificationTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { _ in
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showSavedNotification = false
+            }
+        }
     }
 }
 

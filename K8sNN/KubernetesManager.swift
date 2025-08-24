@@ -5,6 +5,21 @@ import AppKit
 class KubernetesManager: ObservableObject {
     @Published var clusters: [KubernetesCluster] = []
     @Published var isLoading = false
+
+    // Computed property for sorted clusters
+    func sortedClusters(using sortOrder: ClusterSortOrder) -> [KubernetesCluster] {
+        switch sortOrder {
+        case .connectedFirst:
+            return clusters.sorted { cluster1, cluster2 in
+                if cluster1.isAuthenticated != cluster2.isAuthenticated {
+                    return cluster1.isAuthenticated && !cluster2.isAuthenticated
+                }
+                return cluster1.name.localizedCaseInsensitiveCompare(cluster2.name) == .orderedAscending
+            }
+        case .alphabetical:
+            return clusters.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        }
+    }
     @Published var errorMessage: String?
 
     private var timer: Timer?
