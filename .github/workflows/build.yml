@@ -3,7 +3,13 @@ name: Build and Release K8sNN
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version for manual release"
+        required: true
+        default: "v0.1.0-manual"
 
 jobs:
   build:
@@ -30,9 +36,14 @@ jobs:
           cd build/Build/Products/Release
           zip -r ../../../../K8sNN.zip K8sNN.app
 
-      - name: Get version from tag
+      - name: Get version
         id: get_version
-        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
