@@ -238,7 +238,10 @@ struct ClusterRowView: View {
 
                 // Action indicator and status - more compact layout
                 VStack(alignment: .trailing, spacing: 2) {
-                    if cluster.isAuthenticated {
+                    let actionType = cluster.actionType(using: settingsManager)
+
+                    switch actionType {
+                    case .openTerminal:
                         HStack(spacing: 4) {
                             Text("Open Terminal")
                                 .font(.caption2)
@@ -254,7 +257,25 @@ struct ClusterRowView: View {
                                 .scaleEffect(isHovered ? 1.1 : 1.0)
                                 .animation(.easeInOut(duration: 0.2), value: isHovered)
                         }
-                    } else if cluster.usesDexAuth(using: settingsManager) {
+
+                    case .runCommand:
+                        HStack(spacing: 4) {
+                            Text("Run Command")
+                                .font(.caption2)
+                                .foregroundStyle(.purple)
+                                .fontWeight(.medium)
+                                .opacity(isHovered ? 1.0 : 0.8)
+                                .animation(.easeInOut(duration: 0.2), value: isHovered)
+
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.purple)
+                                .opacity(isHovered ? 1.0 : 0.7)
+                                .scaleEffect(isHovered ? 1.1 : 1.0)
+                                .animation(.easeInOut(duration: 0.2), value: isHovered)
+                        }
+
+                    case .openLoginURL:
                         HStack(spacing: 4) {
                             Text("Login Required")
                                 .font(.caption2)
@@ -270,6 +291,9 @@ struct ClusterRowView: View {
                                 .scaleEffect(isHovered ? 1.1 : 1.0)
                                 .animation(.easeInOut(duration: 0.2), value: isHovered)
                         }
+
+                    case .none:
+                        EmptyView()
                     }
 
                     // Last checked time
@@ -307,27 +331,42 @@ struct ClusterRowView: View {
     }
 
     private func handleClusterAction() {
-        NSLog("[K8sNN] MenuBar cluster action: name=\(cluster.name), isAuthenticated=\(cluster.isAuthenticated), usesDexAuth=\(cluster.usesDexAuth)")
+        let actionType = cluster.actionType(using: settingsManager)
+        NSLog("[K8sNN] MenuBar cluster action: name=\(cluster.name), actionType=\(actionType)")
 
-        if cluster.isAuthenticated {
+        switch actionType {
+        case .openTerminal:
             NSLog("[K8sNN] Attempting to open terminal for context \(cluster.name)")
             let success = settingsManager.openTerminalWithContext(cluster.name)
             NSLog("[K8sNN] openTerminalWithContext returned: \(success)")
-        } else if cluster.usesDexAuth(using: settingsManager) {
+
+        case .runCommand:
+            if let command = settingsManager.getCustomCommand(for: cluster.name) {
+                NSLog("[K8sNN] Running custom command for cluster \(cluster.name): \(command)")
+                let success = settingsManager.runCustomCommand(command)
+                NSLog("[K8sNN] runCustomCommand returned: \(success)")
+            }
+
+        case .openLoginURL:
             NSLog("[K8sNN] Opening login page for unauthenticated cluster \(cluster.name)")
             kubernetesManager.openLoginPage(for: cluster, using: settingsManager)
-        } else {
-            NSLog("[K8sNN] Cluster not authenticated and no Dex auth; no action taken")
+
+        case .none:
+            NSLog("[K8sNN] No action available for cluster \(cluster.name)")
         }
     }
 
     private var helpText: String {
-        if cluster.isAuthenticated {
+        let actionType = cluster.actionType(using: settingsManager)
+        switch actionType {
+        case .openTerminal:
             return "Click to open terminal with context '\(cluster.name)'"
-        } else if cluster.usesDexAuth(using: settingsManager) {
+        case .runCommand:
+            return "Click to run custom command"
+        case .openLoginURL:
             return "Click to open login page"
-        } else {
-            return "Cluster not configured for authentication"
+        case .none:
+            return "No action configured for this cluster"
         }
     }
 

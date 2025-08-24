@@ -9,6 +9,7 @@ class SettingsManager: ObservableObject {
     @Published var isHotkeyEnabled: Bool = true
     @Published var terminalApp: String = "iTerm"
     @Published var customLoginURLs: [String: String] = [:]
+    @Published var customCommands: [String: String] = [:]
 
     private let defaults = UserDefaults.standard
     private var hotkeyRef: EventHotKeyRef?
@@ -37,6 +38,12 @@ class SettingsManager: ObservableObject {
            let urls = try? JSONDecoder().decode([String: String].self, from: urlData) {
             customLoginURLs = urls
         }
+
+        // Load custom commands
+        if let commandData = defaults.data(forKey: "customCommands"),
+           let commands = try? JSONDecoder().decode([String: String].self, from: commandData) {
+            customCommands = commands
+        }
     }
     
     func saveSettings() {
@@ -50,6 +57,11 @@ class SettingsManager: ObservableObject {
         // Save custom login URLs
         if let urlData = try? JSONEncoder().encode(customLoginURLs) {
             defaults.set(urlData, forKey: "customLoginURLs")
+        }
+
+        // Save custom commands
+        if let commandData = try? JSONEncoder().encode(customCommands) {
+            defaults.set(commandData, forKey: "customCommands")
         }
 
         // Only re-register hotkey if it actually changed
@@ -80,6 +92,104 @@ class SettingsManager: ObservableObject {
     func removeCustomLoginURL(for clusterName: String) {
         customLoginURLs.removeValue(forKey: clusterName)
         saveSettings()
+    }
+
+    // MARK: - Custom Command Management
+
+    func setCustomCommand(for clusterName: String, command: String) {
+        if command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            customCommands.removeValue(forKey: clusterName)
+        } else {
+            customCommands[clusterName] = command
+        }
+        saveSettings()
+    }
+
+    func getCustomCommand(for clusterName: String) -> String? {
+        return customCommands[clusterName]
+    }
+
+    func removeCustomCommand(for clusterName: String) {
+        customCommands.removeValue(forKey: clusterName)
+        saveSettings()
+    }
+
+    func runCustomCommand(_ command: String) -> Bool {
+        NSLog("[K8sNN] Running custom command: \(command)")
+
+        // Use the same terminal opening logic as openTerminalWithContext but with custom command
+        func tryITermWithCommand() -> Bool {
+            let script = """
+            tell application "iTerm"
+                activate
+                tell current window
+                    create tab with default profile
+                    tell current session
+                        write text "\(command.replacingOccurrences(of: "\"", with: "\\\""))"
+                    end tell
+                end tell
+            end tell
+            """
+
+            var error: NSDictionary?
+            if let scriptObject = NSAppleScript(source: script) {
+                scriptObject.executeAndReturnError(&error)
+                if error == nil {
+                    NSLog("[K8sNN] Successfully sent custom command to iTerm")
+                    return true
+                } else {
+                    NSLog("[K8sNN] iTerm AppleScript error: \(error!)")
+                }
+            }
+            return false
+        }
+
+        func tryTerminalWithCommand() -> Bool {
+            let script = """
+            tell application "Terminal"
+                activate
+                do script "\(command.replacingOccurrences(of: "\"", with: "\\\""))"
+            end tell
+            """
+
+            var error: NSDictionary?
+            if let scriptObject = NSAppleScript(source: script) {
+                scriptObject.executeAndReturnError(&error)
+                if error == nil {
+                    NSLog("[K8sNN] Successfully sent custom command to Terminal")
+                    return true
+                } else {
+                    NSLog("[K8sNN] Terminal AppleScript error: \(error!)")
+                }
+            }
+            return false
+        }
+
+        func tryTerminalWithWorkspace() -> Bool {
+            NSLog("[K8sNN] Trying workspace fallback for custom command...")
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            task.arguments = ["-a", "Terminal"]
+
+            do {
+                try task.run()
+                NSLog("[K8sNN] Opened Terminal via workspace (command will need to be run manually)")
+                return true
+            } catch {
+                NSLog("[K8sNN] Failed to open Terminal via workspace: \(error)")
+                return false
+            }
+        }
+
+        // Try terminal apps based on preference
+        switch terminalApp {
+        case "iTerm":
+            return tryITermWithCommand() || tryTerminalWithCommand() || tryTerminalWithWorkspace()
+        case "Terminal":
+            return tryTerminalWithCommand() || tryITermWithCommand() || tryTerminalWithWorkspace()
+        default:
+            return tryITermWithCommand() || tryTerminalWithCommand() || tryTerminalWithWorkspace()
+        }
     }
 
     private func setupHotkey() {

@@ -253,17 +253,28 @@ struct SpotlightOverlay: View {
             return
         }
         let cluster = filteredClusters[selectedIndex]
-        NSLog("[K8sNN] Spotlight selected cluster: name=\(cluster.name), isAuthenticated=\(cluster.isAuthenticated), usesDexAuth=\(cluster.usesDexAuth)")
+        let actionType = cluster.actionType(using: settingsManager)
+        NSLog("[K8sNN] Spotlight selected cluster: name=\(cluster.name), actionType=\(actionType)")
 
-        if cluster.isAuthenticated {
+        switch actionType {
+        case .openTerminal:
             NSLog("[K8sNN] Attempting to open terminal for context \(cluster.name)")
             let ok = settingsManager.openTerminalWithContext(cluster.name)
             NSLog("[K8sNN] openTerminalWithContext returned: \(ok)")
-        } else if cluster.usesDexAuth(using: settingsManager) {
+
+        case .runCommand:
+            if let command = settingsManager.getCustomCommand(for: cluster.name) {
+                NSLog("[K8sNN] Running custom command for cluster \(cluster.name): \(command)")
+                let success = settingsManager.runCustomCommand(command)
+                NSLog("[K8sNN] runCustomCommand returned: \(success)")
+            }
+
+        case .openLoginURL:
             NSLog("[K8sNN] Opening login page for unauthenticated cluster \(cluster.name)")
             kubernetesManager.openLoginPage(for: cluster, using: settingsManager)
-        } else {
-            NSLog("[K8sNN] Cluster not authenticated and no Dex auth; no action taken")
+
+        case .none:
+            NSLog("[K8sNN] No action available for cluster \(cluster.name)")
         }
 
         // Hide the overlay after action
@@ -316,7 +327,10 @@ struct SpotlightClusterRow: View {
                 Spacer()
 
                 // Status text and action with hover effects
-                if cluster.isAuthenticated {
+                let actionType = cluster.actionType(using: settingsManager)
+
+                switch actionType {
+                case .openTerminal:
                     Text("Open Terminal")
                         .font(.caption)
                         .foregroundStyle(.blue)
@@ -331,7 +345,24 @@ struct SpotlightClusterRow: View {
                         .scaleEffect((isSelected || isHovered) ? 1.1 : 1.0)
                         .animation(.easeInOut(duration: 0.2), value: isHovered)
                         .animation(.easeInOut(duration: 0.2), value: isSelected)
-                } else {
+
+                case .runCommand:
+                    Text("Run Command")
+                        .font(.caption)
+                        .foregroundStyle(.purple)
+                        .fontWeight(.medium)
+                        .opacity((isSelected || isHovered) ? 1.0 : 0.8)
+                        .animation(.easeInOut(duration: 0.2), value: isHovered)
+                        .animation(.easeInOut(duration: 0.2), value: isSelected)
+
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.purple)
+                        .scaleEffect((isSelected || isHovered) ? 1.1 : 1.0)
+                        .animation(.easeInOut(duration: 0.2), value: isHovered)
+                        .animation(.easeInOut(duration: 0.2), value: isSelected)
+
+                case .openLoginURL:
                     Text("Login Required")
                         .font(.caption)
                         .foregroundStyle(.orange)
@@ -340,14 +371,21 @@ struct SpotlightClusterRow: View {
                         .animation(.easeInOut(duration: 0.2), value: isHovered)
                         .animation(.easeInOut(duration: 0.2), value: isSelected)
 
-                    if cluster.usesDexAuth(using: settingsManager) {
-                        Image(systemName: "arrow.up.right.square.fill")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.blue)
-                            .scaleEffect((isSelected || isHovered) ? 1.1 : 1.0)
-                            .animation(.easeInOut(duration: 0.2), value: isHovered)
-                            .animation(.easeInOut(duration: 0.2), value: isSelected)
-                    }
+                    Image(systemName: "arrow.up.right.square.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.blue)
+                        .scaleEffect((isSelected || isHovered) ? 1.1 : 1.0)
+                        .animation(.easeInOut(duration: 0.2), value: isHovered)
+                        .animation(.easeInOut(duration: 0.2), value: isSelected)
+
+                case .none:
+                    Text("No Action")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fontWeight(.medium)
+                        .opacity((isSelected || isHovered) ? 1.0 : 0.8)
+                        .animation(.easeInOut(duration: 0.2), value: isHovered)
+                        .animation(.easeInOut(duration: 0.2), value: isSelected)
                 }
             }
             .padding(.horizontal, 16)

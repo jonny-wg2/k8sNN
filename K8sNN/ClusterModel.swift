@@ -101,6 +101,28 @@ struct KubernetesCluster: Identifiable, Codable {
     func usesDexAuth(using settingsManager: SettingsManager?) -> Bool {
         return loginURL(using: settingsManager) != nil
     }
+
+    // Determine the action type for this cluster
+    func actionType(using settingsManager: SettingsManager?) -> ClusterActionType {
+        if isAuthenticated {
+            return .openTerminal
+        } else if let settingsManager = settingsManager,
+                  settingsManager.getCustomCommand(for: name) != nil {
+            return .runCommand
+        } else if usesDexAuth(using: settingsManager) {
+            return .openLoginURL
+        } else {
+            return .none
+        }
+    }
+}
+
+// Enum to represent different cluster action types
+enum ClusterActionType {
+    case openTerminal    // Authenticated cluster - open terminal with context
+    case runCommand      // Custom command configured - run the command
+    case openLoginURL    // Dex auth available - open login URL
+    case none           // No action available
 }
 
 struct KubernetesConfig: Codable {

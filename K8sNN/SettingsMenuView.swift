@@ -262,11 +262,11 @@ struct CustomLoginURLsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Cluster Login URLs")
+            Text("Cluster Configuration")
                 .font(.subheadline)
                 .fontWeight(.semibold)
 
-            Text("Customize login URLs for clusters. Auto-generated URLs are shown by default.")
+            Text("Customize login URLs and commands for clusters. Configure SSH tunnels or other setup commands.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -292,7 +292,9 @@ struct ClusterLoginURLRow: View {
     let cluster: KubernetesCluster
     @EnvironmentObject var settingsManager: SettingsManager
     @State private var editedURL: String = ""
-    @State private var isEditing = false
+    @State private var editedCommand: String = ""
+    @State private var isEditingURL = false
+    @State private var isEditingCommand = false
     @State private var isHovered = false
 
     var body: some View {
@@ -335,28 +337,80 @@ struct ClusterLoginURLRow: View {
 
             // URL input field
             if cluster.usesDexAuth(using: settingsManager) || settingsManager.getCustomLoginURL(for: cluster.name) != nil {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Login URL")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fontWeight(.medium)
+
+                    HStack(spacing: 8) {
+                        TextField("Login URL", text: $editedURL)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.caption)
+                            .onSubmit {
+                                saveURL()
+                            }
+                            .onChange(of: editedURL) { _, newValue in
+                                if newValue != currentDisplayURL {
+                                    isEditingURL = true
+                                } else {
+                                    isEditingURL = false
+                                }
+                            }
+
+                        if isEditingURL {
+                            GlassButton(action: saveURL) {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(.green)
+                            }
+                            .help("Save URL")
+                        }
+                    }
+                }
+            }
+
+            // Command input field
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Custom Command (optional)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fontWeight(.medium)
+
                 HStack(spacing: 8) {
-                    TextField("Login URL", text: $editedURL)
+                    TextField("ssh -N -L 6443:10.1.2.3:6443 server.com", text: $editedCommand)
                         .textFieldStyle(.roundedBorder)
                         .font(.caption)
                         .onSubmit {
-                            saveURL()
+                            saveCommand()
                         }
-                        .onChange(of: editedURL) { _, newValue in
-                            if newValue != currentDisplayURL {
-                                isEditing = true
+                        .onChange(of: editedCommand) { _, newValue in
+                            if newValue != currentDisplayCommand {
+                                isEditingCommand = true
                             } else {
-                                isEditing = false
+                                isEditingCommand = false
                             }
                         }
 
-                    if isEditing {
-                        GlassButton(action: saveURL) {
+                    if isEditingCommand {
+                        GlassButton(action: saveCommand) {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(.green)
                         }
-                        .help("Save URL")
+                        .help("Save Command")
+                    }
+
+                    if settingsManager.getCustomCommand(for: cluster.name) != nil {
+                        GlassButton(action: {
+                            settingsManager.removeCustomCommand(for: cluster.name)
+                            editedCommand = ""
+                        }) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.red)
+                        }
+                        .help("Remove Custom Command")
                     }
                 }
             }
@@ -375,11 +429,16 @@ struct ClusterLoginURLRow: View {
         }
         .onAppear {
             editedURL = currentDisplayURL
+            editedCommand = currentDisplayCommand
         }
     }
 
     private var currentDisplayURL: String {
         return cluster.loginURL(using: settingsManager) ?? ""
+    }
+
+    private var currentDisplayCommand: String {
+        return settingsManager.getCustomCommand(for: cluster.name) ?? ""
     }
 
     private func saveURL() {
@@ -390,7 +449,13 @@ struct ClusterLoginURLRow: View {
         } else {
             settingsManager.setCustomLoginURL(for: cluster.name, url: trimmedURL)
         }
-        isEditing = false
+        isEditingURL = false
+    }
+
+    private func saveCommand() {
+        let trimmedCommand = editedCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+        settingsManager.setCustomCommand(for: cluster.name, command: trimmedCommand)
+        isEditingCommand = false
     }
 }
 
