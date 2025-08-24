@@ -1,0 +1,74 @@
+name: Build and Release K8sNN
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build K8sNN
+        run: |
+          # Build the app
+          xcodebuild -project K8sNN.xcodeproj \
+            -scheme K8sNN \
+            -configuration Release \
+            -derivedDataPath build
+            
+          # Create ZIP archive
+          cd build/Build/Products/Release
+          zip -r ../../../../K8sNN.zip K8sNN.app
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          name: K8sNN ${{ steps.get_version.outputs.version }}
+          body: |
+            ## K8sNN - Kubernetes Cluster Authentication Monitor
+
+            ### Features
+            - Beautiful macOS menubar app for monitoring Kubernetes cluster authentication
+            - Real-time authentication status indicators
+            - One-click access to Dex login pages
+            - Spotlight-style cluster search interface
+            - Automatic cluster discovery from kubectl config
+            - Custom SSH tunnel commands for complex cluster setups
+            - Configurable login URLs per cluster
+            - Customizable menu bar size and sorting options
+
+            ### Installation
+            1. Download `K8sNN.zip` from the assets below
+            2. Extract the archive
+            3. Move K8sNN.app to your Applications folder
+            4. Launch from Applications or Spotlight
+
+            ### Requirements
+            - macOS 14.0 or later
+            - kubectl installed and configured
+
+            ### First Launch
+            1. The app will appear in your menubar with a server icon
+            2. Click the icon to see your clusters
+            3. Use ⌘+K for quick cluster search
+            4. Configure settings by clicking the settings button
+
+          files: |
+            K8sNN.zip
+          draft: false
+          prerelease: false
