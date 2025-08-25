@@ -9,15 +9,32 @@ final class SpotlightController {
 
     // Show or focus the overlay
     func show(kubernetesManager: KubernetesManager, settingsManager: SettingsManager) {
+        showWithMode(.clusters, kubernetesManager: kubernetesManager, settingsManager: settingsManager)
+    }
+
+    // Show spotlight in multi-command mode
+    func showMultiCommand(kubernetesManager: KubernetesManager, settingsManager: SettingsManager) {
+        showWithMode(.multiCommand, kubernetesManager: kubernetesManager, settingsManager: settingsManager)
+    }
+
+    private func showWithMode(_ mode: SpotlightMode, kubernetesManager: KubernetesManager, settingsManager: SettingsManager) {
         if let win = window {
             // Bring to front and focus
             win.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
+
+            // Update the mode if needed
+            if let hostingView = win.contentView as? NSHostingView<SpotlightOverlay> {
+                // We need to recreate the view with the new mode
+                // For now, just close and reopen
+                hide()
+                showWithMode(mode, kubernetesManager: kubernetesManager, settingsManager: settingsManager)
+            }
             return
         }
 
         let win = SpotlightOverlayWindow()
-        let content = SpotlightOverlay()
+        let content = SpotlightOverlay(initialMode: mode)
             .environmentObject(kubernetesManager)
             .environmentObject(settingsManager)
 

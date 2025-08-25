@@ -50,6 +50,15 @@ struct MenuBarView: View {
                 Spacer()
 
                 GlassButton(action: {
+                    showMultiClusterView()
+                }) {
+                    Image(systemName: "terminal.fill")
+                        .foregroundStyle(.secondary)
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .help("Multi-Cluster Commands")
+
+                GlassButton(action: {
                     kubernetesManager.refreshClusters()
                 }) {
                     Image(systemName: "arrow.clockwise")
@@ -187,6 +196,26 @@ struct MenuBarView: View {
             .padding(.vertical, 10)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 0))
         }
+    }
+
+    private func showMultiClusterView() {
+        let multiClusterWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 700, height: 600),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+
+        multiClusterWindow.title = "Multi-Cluster kubectl"
+        multiClusterWindow.center()
+        multiClusterWindow.setFrameAutosaveName("MultiClusterWindow")
+
+        let contentView = SimpleMultiClusterView()
+            .environmentObject(kubernetesManager)
+
+        multiClusterWindow.contentView = NSHostingView(rootView: contentView)
+        multiClusterWindow.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
 

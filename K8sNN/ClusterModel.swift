@@ -1,5 +1,172 @@
 import Foundation
 
+// MARK: - Multi-Cluster Command Models
+
+struct MultiClusterCommand: Identifiable {
+    let id = UUID()
+    let command: String
+    let targetClusters: [String] // cluster names
+    let createdAt: Date
+    var executionSession: CommandExecutionSession?
+
+    init(command: String, targetClusters: [String]) {
+        self.command = command
+        self.targetClusters = targetClusters
+        self.createdAt = Date()
+    }
+}
+
+struct CommandExecutionSession: Identifiable {
+    let id = UUID()
+    let command: String
+    let targetClusters: [String]
+    let startTime: Date
+    var endTime: Date?
+    var status: ExecutionStatus
+    var results: [ClusterCommandResult]
+    var progress: Double // 0.0 to 1.0
+
+    init(command: String, targetClusters: [String]) {
+        self.command = command
+        self.targetClusters = targetClusters
+        self.startTime = Date()
+        self.status = .running
+        self.results = []
+        self.progress = 0.0
+    }
+
+    var duration: TimeInterval? {
+        guard let endTime = endTime else { return nil }
+        return endTime.timeIntervalSince(startTime)
+    }
+
+    var isComplete: Bool {
+        return status == .completed || status == .failed
+    }
+
+    var successCount: Int {
+        return results.filter { $0.status == .success }.count
+    }
+
+    var failureCount: Int {
+        return results.filter { $0.status == .failed }.count
+    }
+}
+
+struct ClusterCommandResult: Identifiable {
+    let id = UUID()
+    let clusterName: String
+    let command: String
+    let startTime: Date
+    var endTime: Date?
+    var status: CommandResultStatus
+    var output: String
+    var errorOutput: String
+    var exitCode: Int32?
+
+    init(clusterName: String, command: String) {
+        self.clusterName = clusterName
+        self.command = command
+        self.startTime = Date()
+        self.status = .running
+        self.output = ""
+        self.errorOutput = ""
+    }
+
+    var duration: TimeInterval? {
+        guard let endTime = endTime else { return nil }
+        return endTime.timeIntervalSince(startTime)
+    }
+
+    var isComplete: Bool {
+        return status == .success || status == .failed || status == .timeout
+    }
+
+    var displayOutput: String {
+        if !output.isEmpty {
+            return output
+        } else if !errorOutput.isEmpty {
+            return errorOutput
+        } else {
+            return "No output"
+        }
+    }
+}
+
+enum ExecutionStatus {
+    case running
+    case completed
+    case failed
+    case cancelled
+}
+
+enum CommandResultStatus {
+    case running
+    case success
+    case failed
+    case timeout
+    case cancelled
+}
+
+// MARK: - Command Templates
+
+struct CommandTemplate: Identifiable {
+    let id = UUID()
+    let name: String
+    let command: String
+    let description: String
+    let category: CommandCategory
+
+    static let defaultTemplates: [CommandTemplate] = [
+        CommandTemplate(
+            name: "List Pods",
+            command: "get pods --all-namespaces",
+            description: "List all pods across all namespaces",
+            category: .pods
+        ),
+        CommandTemplate(
+            name: "List Nodes",
+            command: "get nodes -o wide",
+            description: "List all nodes with detailed information",
+            category: .nodes
+        ),
+        CommandTemplate(
+            name: "Cluster Info",
+            command: "cluster-info",
+            description: "Display cluster information",
+            category: .cluster
+        ),
+        CommandTemplate(
+            name: "List Services",
+            command: "get services --all-namespaces",
+            description: "List all services across all namespaces",
+            category: .services
+        ),
+        CommandTemplate(
+            name: "List Deployments",
+            command: "get deployments --all-namespaces",
+            description: "List all deployments across all namespaces",
+            category: .workloads
+        ),
+        CommandTemplate(
+            name: "Resource Usage",
+            command: "top nodes",
+            description: "Show resource usage for nodes",
+            category: .monitoring
+        )
+    ]
+}
+
+enum CommandCategory: String, CaseIterable {
+    case pods = "Pods"
+    case nodes = "Nodes"
+    case services = "Services"
+    case workloads = "Workloads"
+    case cluster = "Cluster"
+    case monitoring = "Monitoring"
+    case custom = "Custom"
+}
+
 struct KubernetesCluster: Identifiable, Codable {
     let id: UUID
     let name: String
