@@ -200,9 +200,9 @@ struct MenuBarView: View {
     }
 
     private func showMultiClusterView() {
-        // Create a window with glass effect styling
+        // Create a window with glass effect styling using settings-based size
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 850, height: 750),
+            contentRect: NSRect(x: 0, y: 0, width: settingsManager.multiClusterWindowWidth, height: settingsManager.multiClusterWindowHeight),
             styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false

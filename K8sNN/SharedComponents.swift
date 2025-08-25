@@ -122,12 +122,12 @@ struct GlassButton<Label: View>: View {
     let action: () -> Void
     let label: () -> Label
     @State private var isHovered = false
-    
+
     init(action: @escaping () -> Void, @ViewBuilder label: @escaping () -> Label) {
         self.action = action
         self.label = label
     }
-    
+
     var body: some View {
         Button(action: action) {
             label()
@@ -168,12 +168,12 @@ struct CompactGlassButton<Label: View>: View {
     let action: () -> Void
     let label: () -> Label
     @State private var isHovered = false
-    
+
     init(action: @escaping () -> Void, @ViewBuilder label: @escaping () -> Label) {
         self.action = action
         self.label = label
     }
-    
+
     var body: some View {
         Button(action: action) {
             label()
@@ -193,6 +193,43 @@ struct CompactGlassButton<Label: View>: View {
         )
         .scaleEffect(isHovered ? 1.05 : 1.0)
         .animation(.easeInOut(duration: 0.2), value: isHovered)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isHovered = hovering
+            }
+        }
+
+    }
+}
+
+// MARK: - Tiny Icon Button (fixed-size icon-only button to avoid layout jumps)
+struct TinyIconButton<Label: View>: View {
+    let action: () -> Void
+    let label: () -> Label
+    @State private var isHovered = false
+
+    init(action: @escaping () -> Void, @ViewBuilder label: @escaping () -> Label) {
+        self.action = action
+        self.label = label
+    }
+
+    var body: some View {
+        Button(action: action) {
+            label()
+                .frame(width: 18, height: 18)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .frame(width: 22, height: 22)
+        .background(
+            RoundedRectangle(cornerRadius: 5)
+                .fill(isHovered ? .blue.opacity(0.08) : .clear)
+                .animation(.easeInOut(duration: 0.2), value: isHovered)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 5)
+                .stroke(isHovered ? .blue.opacity(0.15) : .clear, lineWidth: 0.5)
+                .animation(.easeInOut(duration: 0.2), value: isHovered)
+        )
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.2)) {
                 isHovered = hovering

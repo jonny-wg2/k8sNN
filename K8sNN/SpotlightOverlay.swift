@@ -64,6 +64,22 @@ class SpotlightOverlayWindow: NSWindow {
         return true
     }
 
+    func updateSize(width: CGFloat, height: CGFloat) {
+        let currentFrame = self.frame
+
+        // Calculate new frame to keep window centered
+        let newX = currentFrame.midX - width / 2
+        let newY = currentFrame.midY - height / 2
+        let newFrame = NSRect(x: newX, y: newY, width: width, height: height)
+
+        // Animate the resize
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.3
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            self.animator().setFrame(newFrame, display: true)
+        }
+    }
+
     private func setupEventMonitors() {
         // Monitor for clicks outside the window
         clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
@@ -191,8 +207,16 @@ struct SpotlightOverlay: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                         .background(
+                            VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        )
+                        .overlay(
                             RoundedRectangle(cornerRadius: 8)
-                                .fill(currentMode == mode ? .blue : .clear)
+                                .fill(Color.blue.opacity(currentMode == mode ? 0.08 : 0))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(currentMode == mode ? Color.blue.opacity(0.6) : Color.white.opacity(0.12), lineWidth: currentMode == mode ? 1.5 : 1)
                         )
                     }
                     .buttonStyle(.plain)
@@ -218,12 +242,24 @@ struct SpotlightOverlay: View {
             Spacer()
         }
         .padding(20)
-        .frame(width: currentMode == .multiCluster ? 1000 : 600,
-               height: currentMode == .multiCluster ? 700 : 400)
         .background(.clear)
         .onAppear {
             isSearchFocused = true
             selectedIndex = 0
+            updateWindowSize()
+        }
+        .onChange(of: currentMode) { _, _ in
+            updateWindowSize()
+        }
+        .onChange(of: settingsManager.multiClusterWindowWidth) { _, _ in
+            if currentMode == .multiCluster {
+                updateWindowSize()
+            }
+        }
+        .onChange(of: settingsManager.multiClusterWindowHeight) { _, _ in
+            if currentMode == .multiCluster {
+                updateWindowSize()
+            }
         }
         .onKeyPress(.escape) {
             NotificationCenter.default.post(name: .hideSpotlight, object: "escKeySwiftUI")
@@ -345,33 +381,39 @@ struct SpotlightOverlay: View {
                     .font(.title2)
                     .fontWeight(.medium)
 
-                TextField("Enter kubectl command...", text: $kubectlCommand)
-                    .textFieldStyle(.plain)
-                    .font(.title2)
-                    .focused($isSearchFocused)
-                    .onSubmit {
-                        executeKubectlCommand()
-                    }
+                ZStack(alignment: .leading) {
+                    // Invisible fixed-height spacer to prevent height jump when actions appear
+                    Text("A")
+                        .font(.title2)
+                        .opacity(0)
+                        .padding(.vertical, 2)
+
+                    TextField("Enter kubectl command...", text: $kubectlCommand)
+                        .textFieldStyle(.plain)
+                        .font(.title2)
+                        .focused($isSearchFocused)
+                        .onSubmit {
+                            executeKubectlCommand()
+                        }
+                }
 
                 if !kubectlCommand.isEmpty {
-                    CompactGlassButton(action: {
-                        kubectlCommand = ""
-                    }) {
+                    TinyIconButton(action: { kubectlCommand = "" }) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
                     }
                 }
 
                 if !selectedClusters.isEmpty && !kubectlCommand.isEmpty {
-                    CompactGlassButton(action: {
-                        executeKubectlCommand()
-                    }) {
-                        if isExecuting {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                        } else {
-                            Image(systemName: "play.fill")
-                                .foregroundStyle(.blue)
+                    TinyIconButton(action: { executeKubectlCommand() }) {
+                        ZStack {
+                            if isExecuting {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(.blue)
+                            }
                         }
                     }
                     .disabled(isExecuting)
@@ -392,11 +434,15 @@ struct SpotlightOverlay: View {
                     HStack {
                         Text("Target Clusters")
                             .font(.headline)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(
+                            VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
+                                .clipShape(Capsule())
+                        )
 
-                        Spacer()
-
-                        Button(selectedClusters.count == kubernetesManager.clusters.filter({ $0.isAuthenticated }).count ? "Deselect All" : "Select All") {
+                        GlassButton(selectedClusters.count == kubernetesManager.clusters.filter({ $0.isAuthenticated }).count ? "Deselect All" : "Select All") {
                             let authenticatedClusters = kubernetesManager.clusters.filter { $0.isAuthenticated }
                             if selectedClusters.count == authenticatedClusters.count {
                                 selectedClusters.removeAll()
@@ -434,11 +480,6 @@ struct SpotlightOverlay: View {
             // Results
             if !executionResults.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Results")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, 20)
-
                     ScrollView {
                         LazyVGrid(columns: [
                             GridItem(.flexible(), spacing: 12),
@@ -451,7 +492,7 @@ struct SpotlightOverlay: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, 20)
                     }
-                    .frame(maxHeight: 350)
+                    .frame(maxHeight: .infinity)
                 }
                 .padding(.top, 12)
             }
@@ -604,6 +645,16 @@ struct SpotlightOverlay: View {
             isSuccess: isSuccess,
             executionTime: executionTime
         )
+    }
+
+    private func updateWindowSize() {
+        // Get the current window
+        guard let window = NSApp.keyWindow as? SpotlightOverlayWindow else { return }
+
+        let width: CGFloat = currentMode == .multiCluster ? settingsManager.multiClusterWindowWidth : 600
+        let height: CGFloat = currentMode == .multiCluster ? settingsManager.multiClusterWindowHeight : 400
+
+        window.updateSize(width: width, height: height)
     }
 }
 
@@ -815,12 +866,16 @@ struct ClusterToggleChip: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(
+                VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+            )
+            .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? Color.blue.opacity(0.2) : Color(NSColor.controlBackgroundColor))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(isSelected ? .blue : .clear, lineWidth: 1)
-                    )
+                    .fill(.white.opacity(isSelected ? 0.08 : 0))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(isSelected ? .blue.opacity(0.7) : .white.opacity(0.12), lineWidth: isSelected ? 1.5 : 1)
             )
             .scaleEffect(isHovered ? 1.05 : 1.0)
             .animation(.easeInOut(duration: 0.2), value: isHovered)
@@ -900,7 +955,7 @@ struct MultiClusterResultRow: View {
                     }
                 }
             }
-            .frame(maxHeight: isExpanded ? 200 : 80)
+            .frame(minHeight: isExpanded ? 160 : 80)
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
             .background(

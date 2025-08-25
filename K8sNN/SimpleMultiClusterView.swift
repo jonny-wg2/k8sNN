@@ -3,14 +3,15 @@ import Foundation
 
 struct SimpleMultiClusterView: View {
     @EnvironmentObject var kubernetesManager: KubernetesManager
+    @EnvironmentObject var settingsManager: SettingsManager
     @State private var commandText: String = ""
     @State private var results: [ClusterResult] = []
     @State private var isExecuting: Bool = false
-    
+
     var authenticatedClusters: [KubernetesCluster] {
         kubernetesManager.clusters.filter { $0.isAuthenticated }
     }
-    
+
     var body: some View {
         VStack(spacing: 16) {
             headerView
@@ -19,41 +20,87 @@ struct SimpleMultiClusterView: View {
             resultsView
         }
         .padding(20)
-        .frame(width: 700, height: 600)
+        .frame(width: settingsManager.multiClusterWindowWidth, height: settingsManager.multiClusterWindowHeight)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
-    
+
+    // MARK: - Glass Chip helper for readability
+    private func GlassChip(_ text: String) -> some View {
+        Text(text)
+            .font(.subheadline)
+            .fontWeight(.semibold)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(
+                VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
+                    .clipShape(Capsule())
+            )
+    }
+
     private var headerView: some View {
         HStack {
             Image(systemName: "terminal.fill")
                 .foregroundStyle(.blue.gradient)
                 .font(.title2)
-            
+
             Text("Multi-Cluster kubectl")
                 .font(.headline)
                 .fontWeight(.medium)
-                .foregroundStyle(.primary)
-            
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
+                        .clipShape(Capsule())
+                )
+
             Spacer()
-            
+
             Text("\(authenticatedClusters.count) active clusters")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
     }
-    
+
     private var commandInputView: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Command")
+                GlassChip("Target Clusters")
+                GlassButton("Select All") {
+                    if authenticatedClusters.count == results.count { /* noop in simple view */ }
+                }
+                .font(.caption)
+                .foregroundStyle(.blue)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(authenticatedClusters, id: \.id) { cluster in
+                            Text(cluster.name)
+                                .font(.caption)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(
+                                    VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
+                                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(.white.opacity(0.12), lineWidth: 1)
+                                )
+                        }
+                    }
+                }
+
                 .font(.subheadline)
                 .fontWeight(.semibold)
-            
+
             HStack {
                 Text("kubectl")
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .padding(.leading, 4)
-                
+
                 TextField("get pods", text: $commandText)
                     .textFieldStyle(.plain)
                     .font(.system(.body, design: .monospaced))
@@ -67,7 +114,7 @@ struct SimpleMultiClusterView: View {
             }
         }
     }
-    
+
     private var executeButtonView: some View {
         HStack {
             if isExecuting {
@@ -75,14 +122,14 @@ struct SimpleMultiClusterView: View {
                     ProgressView()
                         .scaleEffect(0.8)
                         .tint(.blue)
-                    
+
                     Text("Executing on \(authenticatedClusters.count) clusters...")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
             } else {
                 Spacer()
-                
+
                 Button(action: executeCommand) {
                     HStack(spacing: 8) {
                         Image(systemName: "play.fill")
@@ -104,94 +151,105 @@ struct SimpleMultiClusterView: View {
             }
         }
     }
-    
+
     private var resultsView: some View {
         VStack(alignment: .leading, spacing: 8) {
             if !results.isEmpty {
-                Text("Results")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(results) { result in
-                            ClusterResultView(result: result)
+                GeometryReader { geo in
+                    let columns = [
+                        GridItem(.flexible(), spacing: 12),
+                        GridItem(.flexible(), spacing: 12)
+                    ]
+                    let rows = max(1, Int(ceil(Double(results.count) / 2.0)))
+                    let verticalSpacing: CGFloat = 12
+                    let totalSpacing = CGFloat(max(0, rows - 1)) * verticalSpacing
+                    let availableHeight = max(0, geo.size.height - totalSpacing)
+                    let cardHeight = max(140, availableHeight / CGFloat(rows))
+
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: verticalSpacing) {
+                            ForEach(results) { result in
+                                ClusterResultView(result: result)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: cardHeight)
+                            }
                         }
+                        .padding(.bottom, 4)
                     }
                 }
             }
         }
     }
-    
+
     private var canExecute: Bool {
         !commandText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !authenticatedClusters.isEmpty &&
         !isExecuting
     }
-    
+
     private func executeCommand() {
         let trimmedCommand = commandText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedCommand.isEmpty else { return }
-        
+
         isExecuting = true
         results = []
-        
+
         // Create initial results for all clusters
         results = authenticatedClusters.map { cluster in
             ClusterResult(clusterName: cluster.name, command: trimmedCommand, status: .running)
         }
-        
+
         // Execute commands in parallel
         for (index, cluster) in authenticatedClusters.enumerated() {
             executeCommandOnCluster(cluster: cluster, command: trimmedCommand, resultIndex: index)
         }
     }
-    
+
     private func executeCommandOnCluster(cluster: KubernetesCluster, command: String, resultIndex: Int) {
         DispatchQueue.global(qos: .userInitiated).async {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: findKubectlPath())
             process.arguments = ["--context", cluster.name] + command.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-            
+
             let outputPipe = Pipe()
             let errorPipe = Pipe()
             process.standardOutput = outputPipe
             process.standardError = errorPipe
-            
+
             let startTime = Date()
-            
+
             do {
                 try process.run()
                 process.waitUntilExit()
-                
+
                 let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
                 let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-                
+
                 let output = String(data: outputData, encoding: .utf8) ?? ""
                 let errorOutput = String(data: errorData, encoding: .utf8) ?? ""
                 let duration = Date().timeIntervalSince(startTime)
-                
+
                 DispatchQueue.main.async {
                     if resultIndex < self.results.count {
                         self.results[resultIndex].output = output
                         self.results[resultIndex].errorOutput = errorOutput
                         self.results[resultIndex].duration = duration
                         self.results[resultIndex].status = process.terminationStatus == 0 ? .success : .failed
-                        
+
                         // Check if all commands are done
                         if self.results.allSatisfy({ $0.status != .running }) {
                             self.isExecuting = false
                         }
                     }
                 }
-                
+
             } catch {
                 DispatchQueue.main.async {
                     if resultIndex < self.results.count {
                         self.results[resultIndex].errorOutput = "Failed to execute: \(error.localizedDescription)"
                         self.results[resultIndex].status = .failed
                         self.results[resultIndex].duration = Date().timeIntervalSince(startTime)
-                        
+
                         // Check if all commands are done
                         if self.results.allSatisfy({ $0.status != .running }) {
                             self.isExecuting = false
@@ -201,20 +259,20 @@ struct SimpleMultiClusterView: View {
             }
         }
     }
-    
+
     private func findKubectlPath() -> String {
         let commonPaths = [
             "/usr/local/bin/kubectl",
             "/opt/homebrew/bin/kubectl",
             "/usr/bin/kubectl"
         ]
-        
+
         for path in commonPaths {
             if FileManager.default.fileExists(atPath: path) {
                 return path
             }
         }
-        
+
         return "/usr/local/bin/kubectl" // fallback
     }
 }
@@ -227,11 +285,11 @@ struct ClusterResult: Identifiable {
     var errorOutput: String = ""
     var status: ResultStatus = .running
     var duration: TimeInterval = 0
-    
+
     enum ResultStatus {
         case running, success, failed
     }
-    
+
     var displayOutput: String {
         if !output.isEmpty {
             return output
@@ -288,7 +346,7 @@ struct ClusterResultView: View {
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxHeight: 150)
+                .frame(minHeight: 120)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(.quaternary.opacity(0.2), in: RoundedRectangle(cornerRadius: 6))
