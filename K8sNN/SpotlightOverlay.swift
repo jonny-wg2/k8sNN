@@ -218,7 +218,8 @@ struct SpotlightOverlay: View {
             Spacer()
         }
         .padding(20)
-        .frame(width: 600, height: 400)
+        .frame(width: currentMode == .multiCluster ? 1000 : 600,
+               height: currentMode == .multiCluster ? 700 : 400)
         .background(.clear)
         .onAppear {
             isSearchFocused = true
@@ -339,9 +340,10 @@ struct SpotlightOverlay: View {
         VStack(spacing: 0) {
             // Command input
             HStack(spacing: 12) {
-                Image(systemName: "terminal")
+                Text("kubectl")
                     .foregroundStyle(.secondary)
                     .font(.title2)
+                    .fontWeight(.medium)
 
                 TextField("Enter kubectl command...", text: $kubectlCommand)
                     .textFieldStyle(.plain)
@@ -431,18 +433,26 @@ struct SpotlightOverlay: View {
 
             // Results
             if !executionResults.isEmpty {
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(executionResults) { result in
-                            MultiClusterResultRow(result: result)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Results")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 20)
+
+                    ScrollView {
+                        LazyVGrid(columns: [
+                            GridItem(.flexible(), spacing: 12),
+                            GridItem(.flexible(), spacing: 12)
+                        ], spacing: 12) {
+                            ForEach(executionResults) { result in
+                                MultiClusterResultRow(result: result)
+                            }
                         }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 20)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
+                    .frame(maxHeight: 350)
                 }
-                .frame(maxHeight: 200)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                .padding(.horizontal, 20)
                 .padding(.top, 12)
             }
         }
@@ -838,13 +848,14 @@ struct MultiClusterResultRow: View {
                     .frame(width: 8, height: 8)
 
                 Text(result.clusterName)
-                    .font(.headline)
+                    .font(.subheadline)
                     .fontWeight(.semibold)
+                    .lineLimit(1)
 
                 Spacer()
 
-                Text(String(format: "%.2fs", result.executionTime))
-                    .font(.caption)
+                Text(String(format: "%.1fs", result.executionTime))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
 
                 Button(action: {
@@ -853,37 +864,59 @@ struct MultiClusterResultRow: View {
                     }
                 }) {
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
             }
 
-            // Output preview
-            if !result.output.isEmpty {
-                Text(isExpanded ? result.output : String(result.output.prefix(100)) + (result.output.count > 100 ? "..." : ""))
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 6))
-                    .animation(.easeInOut(duration: 0.2), value: isExpanded)
-            }
+            // Output content
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    // Success output
+                    if !result.output.isEmpty {
+                        Text(result.output)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.primary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
 
-            // Error output
-            if let error = result.error, !error.isEmpty {
-                Text(isExpanded ? error : String(error.prefix(100)) + (error.count > 100 ? "..." : ""))
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.red)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
-                    .animation(.easeInOut(duration: 0.2), value: isExpanded)
+                    // Error output
+                    if let error = result.error, !error.isEmpty {
+                        Text(error)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.red)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    // Empty state
+                    if result.output.isEmpty && (result.error?.isEmpty ?? true) {
+                        Text("No output")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .italic()
+                    }
+                }
             }
+            .frame(maxHeight: isExpanded ? 200 : 80)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(result.isSuccess ? .clear : .red.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(result.isSuccess ? Color.secondary.opacity(0.2) : Color.red.opacity(0.3), lineWidth: 1)
+            )
+            .animation(.easeInOut(duration: 0.2), value: isExpanded)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
