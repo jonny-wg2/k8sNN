@@ -155,6 +155,63 @@ struct SettingsView: View {
 
             Divider()
 
+            // Safety Settings
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Safety & Security")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+
+                Text("Configure safety features for multi-cluster kubectl commands")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 12) {
+                    Toggle("Prevent delete commands", isOn: $settingsManager.preventDeleteCommands)
+                        .toggleStyle(.switch)
+                        .onChange(of: settingsManager.preventDeleteCommands) { _, _ in
+                            settingsManager.saveSettings()
+                        }
+
+                    Spacer()
+
+                    if settingsManager.preventDeleteCommands {
+                        HStack(spacing: 6) {
+                            Image(systemName: "shield.fill")
+                                .foregroundStyle(.green)
+                                .font(.caption)
+                            Text("Protected")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                                .fontWeight(.medium)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+                    } else {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                                .font(.caption)
+                            Text("Unprotected")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                                .fontWeight(.medium)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+
+                Text("When enabled, commands containing 'delete', 'rm', or 'remove' will be blocked to prevent accidental data loss.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 4)
+            }
+            .padding(.vertical, 8)
+
+            Divider()
+
             // Usage Instructions
             VStack(alignment: .leading, spacing: 12) {
                 Text("How to Use")

@@ -1,4 +1,121 @@
 import SwiftUI
+import AppKit
+
+// MARK: - Visual Effect View Wrapper
+
+struct VisualEffectView: NSViewRepresentable {
+    let material: NSVisualEffectView.Material
+    let blendingMode: NSVisualEffectView.BlendingMode
+    let state: NSVisualEffectView.State
+
+    init(
+        material: NSVisualEffectView.Material = .hudWindow,
+        blendingMode: NSVisualEffectView.BlendingMode = .behindWindow,
+        state: NSVisualEffectView.State = .active
+    ) {
+        self.material = material
+        self.blendingMode = blendingMode
+        self.state = state
+    }
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = state
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+        nsView.blendingMode = blendingMode
+        nsView.state = state
+    }
+}
+
+// MARK: - Glass Card Component
+
+struct GlassCard<Content: View>: View {
+    let content: Content
+    let cornerRadius: CGFloat
+    let material: NSVisualEffectView.Material
+    let borderOpacity: Double
+    let shadowRadius: CGFloat
+
+    init(
+        cornerRadius: CGFloat = 16,
+        material: NSVisualEffectView.Material = .hudWindow,
+        borderOpacity: Double = 0.2,
+        shadowRadius: CGFloat = 10,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.cornerRadius = cornerRadius
+        self.material = material
+        self.borderOpacity = borderOpacity
+        self.shadowRadius = shadowRadius
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .background(
+                VisualEffectView(material: material)
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(.white.opacity(borderOpacity), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.1), radius: shadowRadius, x: 0, y: shadowRadius/2)
+    }
+}
+
+// MARK: - Glass Input Field Component
+
+struct GlassTextField: View {
+    let title: String
+    @Binding var text: String
+    let placeholder: String
+    let isSecure: Bool
+
+    init(_ title: String, text: Binding<String>, placeholder: String = "", isSecure: Bool = false) {
+        self.title = title
+        self._text = text
+        self.placeholder = placeholder
+        self.isSecure = isSecure
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !title.isEmpty {
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+            }
+
+            Group {
+                if isSecure {
+                    SecureField(placeholder, text: $text)
+                } else {
+                    TextField(placeholder, text: $text)
+                }
+            }
+            .textFieldStyle(.plain)
+            .font(.system(.body, design: .monospaced))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                VisualEffectView(material: .menu, blendingMode: .withinWindow)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(.white.opacity(0.15), lineWidth: 1)
+            )
+        }
+    }
+}
 
 // MARK: - Glass Button Component
 struct GlassButton<Label: View>: View {
@@ -88,67 +205,160 @@ struct CompactGlassButton<Label: View>: View {
 
 struct SimpleMultiClusterView: View {
     @EnvironmentObject var kubernetesManager: KubernetesManager
+    @EnvironmentObject var settingsManager: SettingsManager
     @State private var commandText: String = ""
     @State private var results: [ClusterResult] = []
     @State private var isExecuting: Bool = false
+    @State private var validationError: String? = nil
 
     var authenticatedClusters: [KubernetesCluster] {
         kubernetesManager.clusters.filter { $0.isAuthenticated }
     }
 
     var body: some View {
-        VStack(spacing: 16) {
-            headerView
-            commandInputView
-            executeButtonView
-            resultsView
+        GlassCard(
+            cornerRadius: 24,
+            material: .hudWindow,
+            borderOpacity: 0.3,
+            shadowRadius: 20
+        ) {
+            VStack(spacing: 0) {
+                headerView
+
+                VStack(spacing: 20) {
+                    commandInputView
+                    executeButtonView
+                    resultsView
+                }
+                .padding(24)
+            }
+            .frame(width: 800, height: 700)
         }
-        .padding(20)
-        .frame(width: 700, height: 600)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .onAppear {
+            // Initialize validation when view appears
+            validateCommand(commandText)
+        }
     }
 
     private var headerView: some View {
-        HStack {
-            Image(systemName: "terminal.fill")
-                .foregroundStyle(.blue.gradient)
-                .font(.title2)
+        HStack(spacing: 16) {
+            HStack(spacing: 12) {
+                Image(systemName: "terminal.fill")
+                    .foregroundStyle(.blue.gradient)
+                    .font(.title2)
+                    .fontWeight(.semibold)
 
-            Text("Multi-Cluster kubectl")
-                .font(.headline)
-                .fontWeight(.medium)
-                .foregroundStyle(.primary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Multi-Cluster kubectl")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+
+                    Text("Execute commands across multiple clusters")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
 
             Spacer()
 
-            Text("\(authenticatedClusters.count) active clusters")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(authenticatedClusters.count)")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.blue)
+
+                Text("active clusters")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(.blue.opacity(0.3), lineWidth: 1)
+            )
         }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 20)
+        .background(
+            VisualEffectView(material: .menu, blendingMode: .withinWindow)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(.white.opacity(0.15), lineWidth: 1)
+        )
     }
 
     private var commandInputView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Command")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
+                Text("Command")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+
+                Spacer()
+
+                if settingsManager.preventDeleteCommands {
+                    HStack(spacing: 6) {
+                        Image(systemName: "shield.fill")
+                            .foregroundStyle(.green)
+                            .font(.caption)
+                        Text("Delete protection enabled")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+                }
+            }
+
+            HStack(spacing: 0) {
                 Text("kubectl")
                     .font(.system(.body, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 4)
+                    .foregroundStyle(.blue)
+                    .fontWeight(.medium)
+                    .padding(.leading, 16)
+                    .padding(.vertical, 12)
+                    .background(.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-                TextField("get pods", text: $commandText)
+                TextField("get pods --all-namespaces", text: $commandText)
                     .textFieldStyle(.plain)
                     .font(.system(.body, design: .monospaced))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(.tertiary, lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(validationError != nil ? .red.opacity(0.5) : .clear, lineWidth: 1)
                     )
+                    .onChange(of: commandText) { _, newValue in
+                        validateCommand(newValue)
+                    }
+            }
+            .background(
+                VisualEffectView(material: .menu, blendingMode: .withinWindow)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(.white.opacity(0.15), lineWidth: 1)
+            )
+
+            if let error = validationError {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.caption)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.leading, 4)
             }
         }
     }
@@ -156,36 +366,67 @@ struct SimpleMultiClusterView: View {
     private var executeButtonView: some View {
         HStack {
             if isExecuting {
-                HStack(spacing: 12) {
+                HStack(spacing: 16) {
                     ProgressView()
-                        .scaleEffect(0.8)
+                        .scaleEffect(1.2)
                         .tint(.blue)
 
-                    Text("Executing on \(authenticatedClusters.count) clusters...")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Executing on \(authenticatedClusters.count) clusters...")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.primary)
+
+                        Text("Running commands in parallel")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(
+                    VisualEffectView(material: .menu, blendingMode: .withinWindow)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(.blue.opacity(0.4), lineWidth: 1)
+                )
             } else {
                 Spacer()
 
                 Button(action: executeCommand) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 14, weight: .medium))
-                        Text("Execute on \(authenticatedClusters.count) clusters")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
+                    HStack(spacing: 10) {
+                        Image(systemName: canExecute ? "play.fill" : "exclamationmark.triangle.fill")
+                            .font(.system(size: 16, weight: .semibold))
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Execute Command")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+
+                            Text("on \(authenticatedClusters.count) clusters")
+                                .font(.caption)
+                                .opacity(0.8)
+                        }
                     }
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
                     .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(canExecute ? Color.blue : Color.gray)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(canExecute ? AnyShapeStyle(.blue.gradient) : AnyShapeStyle(.gray))
                     )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(.white.opacity(0.2), lineWidth: 1)
+                    )
+                    .shadow(color: canExecute ? .blue.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
                 }
                 .disabled(!canExecute)
                 .buttonStyle(.plain)
+                .scaleEffect(canExecute ? 1.0 : 0.95)
+                .animation(.easeInOut(duration: 0.2), value: canExecute)
             }
         }
     }
@@ -211,7 +452,18 @@ struct SimpleMultiClusterView: View {
     private var canExecute: Bool {
         !commandText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !authenticatedClusters.isEmpty &&
-        !isExecuting
+        !isExecuting &&
+        validationError == nil
+    }
+
+    private func validateCommand(_ command: String) {
+        guard !command.isEmpty else {
+            validationError = nil
+            return
+        }
+
+        let validation = settingsManager.validateKubectlCommand(command)
+        validationError = validation.isValid ? nil : validation.errorMessage
     }
 
     private func executeCommand() {
@@ -379,10 +631,13 @@ struct ClusterResultView: View {
                 .background(.quaternary.opacity(0.2), in: RoundedRectangle(cornerRadius: 6))
             }
         }
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .background(
+            VisualEffectView(material: .menu, blendingMode: .withinWindow)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(.tertiary.opacity(0.5), lineWidth: 1)
+                .stroke(.white.opacity(0.2), lineWidth: 1)
         )
     }
 

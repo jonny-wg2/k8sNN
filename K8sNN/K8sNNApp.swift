@@ -24,6 +24,8 @@ struct K8sNNApp: App {
                 .environmentObject(settingsManager)
         }
         .menuBarExtraStyle(.window)
+
+
     }
 
     init() {

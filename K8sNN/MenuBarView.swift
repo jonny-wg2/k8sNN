@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct MenuBarView: View {
     @EnvironmentObject var kubernetesManager: KubernetesManager
@@ -199,22 +200,54 @@ struct MenuBarView: View {
     }
 
     private func showMultiClusterView() {
-        let multiClusterWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 700, height: 600),
-            styleMask: [.titled, .closable, .resizable],
+        // Create a window with glass effect styling
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 850, height: 750),
+            styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
 
-        multiClusterWindow.title = "Multi-Cluster kubectl"
-        multiClusterWindow.center()
-        multiClusterWindow.setFrameAutosaveName("MultiClusterWindow")
+        window.title = "Multi-Cluster kubectl"
+        window.center()
+        window.setFrameAutosaveName("MultiClusterWindow")
+        window.isReleasedWhenClosed = false
 
-        let contentView = SimpleMultiClusterView()
-            .environmentObject(kubernetesManager)
+        // Enable transparency and visual effects
+        window.backgroundColor = NSColor.clear
+        window.isOpaque = false
+        window.hasShadow = true
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
 
-        multiClusterWindow.contentView = NSHostingView(rootView: contentView)
-        multiClusterWindow.makeKeyAndOrderFront(nil)
+        // Create the content view with proper environment objects and glass background
+        let contentView = ZStack {
+            // Full window glass background with gradient overlay
+            ZStack {
+                VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+
+                // Subtle gradient overlay for depth
+                LinearGradient(
+                    colors: [
+                        .black.opacity(0.05),
+                        .clear,
+                        .white.opacity(0.02)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+            .ignoresSafeArea()
+
+            // Main content
+            SimpleMultiClusterView()
+                .environmentObject(kubernetesManager)
+                .environmentObject(settingsManager)
+                .padding(25)
+        }
+
+        window.contentView = NSHostingView(rootView: contentView)
+        window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 }

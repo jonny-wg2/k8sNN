@@ -27,6 +27,7 @@ class SettingsManager: ObservableObject {
     @Published var clusterSortOrder: ClusterSortOrder = .connectedFirst
     @Published var menuBarWidth: Double = 420.0
     @Published var menuBarHeight: Double = 500.0
+    @Published var preventDeleteCommands: Bool = true
 
     private let defaults = UserDefaults.standard
     private var hotkeyRef: EventHotKeyRef?
@@ -68,6 +69,9 @@ class SettingsManager: ObservableObject {
             clusterSortOrder = sortOrder
         }
 
+        // Load safety setting (default to true for safety)
+        preventDeleteCommands = defaults.object(forKey: "preventDeleteCommands") as? Bool ?? true
+
         // Load menu bar width
         let savedWidth = defaults.double(forKey: "menuBarWidth")
         if savedWidth > 0 {
@@ -108,6 +112,9 @@ class SettingsManager: ObservableObject {
         // Save menu bar height
         defaults.set(menuBarHeight, forKey: "menuBarHeight")
 
+        // Save safety setting
+        defaults.set(preventDeleteCommands, forKey: "preventDeleteCommands")
+
         // Only re-register hotkey if it actually changed
         if oldHotkey != hotkey || oldEnabled != isHotkeyEnabled {
             print("Hotkey settings changed, re-registering...")
@@ -116,6 +123,31 @@ class SettingsManager: ObservableObject {
                 setupHotkey()
             }
         }
+    }
+
+    // MARK: - Command Validation
+
+    func validateKubectlCommand(_ command: String) -> (isValid: Bool, errorMessage: String?) {
+        let trimmedCommand = command.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Check if command is empty
+        if trimmedCommand.isEmpty {
+            return (false, "Command cannot be empty")
+        }
+
+        // Check for delete commands if safety is enabled
+        if preventDeleteCommands {
+            let commandParts = trimmedCommand.lowercased().components(separatedBy: .whitespaces)
+            let dangerousCommands = ["delete", "rm", "remove"]
+
+            for dangerous in dangerousCommands {
+                if commandParts.contains(dangerous) {
+                    return (false, "Delete commands are disabled for safety. You can enable them in settings.")
+                }
+            }
+        }
+
+        return (true, nil)
     }
 
     // MARK: - Custom Login URL Management
