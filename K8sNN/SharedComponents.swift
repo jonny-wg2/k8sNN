@@ -219,7 +219,7 @@ struct SimpleMultiClusterView: View {
         GlassCard(
             cornerRadius: 24,
             material: .hudWindow,
-            borderOpacity: 0.3,
+            borderOpacity: 0.0, // Remove border
             shadowRadius: 20
         ) {
             VStack(spacing: 0) {
@@ -227,7 +227,6 @@ struct SimpleMultiClusterView: View {
 
                 VStack(spacing: 20) {
                     commandInputView
-                    executeButtonView
                     resultsView
                 }
                 .padding(24)
@@ -242,53 +241,49 @@ struct SimpleMultiClusterView: View {
 
     private var headerView: some View {
         HStack(spacing: 16) {
-            HStack(spacing: 12) {
-                Image(systemName: "terminal.fill")
-                    .foregroundStyle(.blue.gradient)
-                    .font(.title2)
-                    .fontWeight(.semibold)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Multi-Cluster kubectl")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
-
-                    Text("Execute commands across multiple clusters")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            Image(systemName: "terminal.fill")
+                .foregroundStyle(.blue.gradient)
+                .font(.title2)
+                .fontWeight(.semibold)
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("\(authenticatedClusters.count)")
-                    .font(.title3)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.blue)
+            // Show cluster names
+            HStack(spacing: 12) {
+                ForEach(authenticatedClusters.prefix(3), id: \.name) { cluster in
+                    Text(cluster.name)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(.blue.opacity(0.3), lineWidth: 0.5)
+                        )
+                }
 
-                Text("active clusters")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                if authenticatedClusters.count > 3 {
+                    Text("+\(authenticatedClusters.count - 3)")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+                }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(.blue.opacity(0.3), lineWidth: 1)
-            )
         }
         .padding(.horizontal, 24)
-        .padding(.vertical, 20)
+        .padding(.vertical, 16)
         .background(
             VisualEffectView(material: .menu, blendingMode: .withinWindow)
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(.white.opacity(0.15), lineWidth: 1)
+                .stroke(.white.opacity(0.1), lineWidth: 1)
         )
     }
 
@@ -339,6 +334,47 @@ struct SimpleMultiClusterView: View {
                     .onChange(of: commandText) { _, newValue in
                         validateCommand(newValue)
                     }
+                    .onSubmit {
+                        if canExecute {
+                            executeCommand()
+                        }
+                    }
+
+                // Execute button in the command bar
+                if isExecuting {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .tint(.blue)
+                        Text("Running...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                } else {
+                    Button(action: executeCommand) {
+                        HStack(spacing: 6) {
+                            Image(systemName: canExecute ? "play.fill" : "exclamationmark.triangle.fill")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text("Execute")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(canExecute ? AnyShapeStyle(.blue.gradient) : AnyShapeStyle(.gray))
+                        )
+                    }
+                    .disabled(!canExecute)
+                    .buttonStyle(.plain)
+                    .scaleEffect(canExecute ? 1.0 : 0.95)
+                    .animation(.easeInOut(duration: 0.2), value: canExecute)
+                }
             }
             .background(
                 VisualEffectView(material: .menu, blendingMode: .withinWindow)
@@ -363,73 +399,7 @@ struct SimpleMultiClusterView: View {
         }
     }
 
-    private var executeButtonView: some View {
-        HStack {
-            if isExecuting {
-                HStack(spacing: 16) {
-                    ProgressView()
-                        .scaleEffect(1.2)
-                        .tint(.blue)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Executing on \(authenticatedClusters.count) clusters...")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.primary)
-
-                        Text("Running commands in parallel")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(
-                    VisualEffectView(material: .menu, blendingMode: .withinWindow)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(.blue.opacity(0.4), lineWidth: 1)
-                )
-            } else {
-                Spacer()
-
-                Button(action: executeCommand) {
-                    HStack(spacing: 10) {
-                        Image(systemName: canExecute ? "play.fill" : "exclamationmark.triangle.fill")
-                            .font(.system(size: 16, weight: .semibold))
-
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("Execute Command")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-
-                            Text("on \(authenticatedClusters.count) clusters")
-                                .font(.caption)
-                                .opacity(0.8)
-                        }
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(canExecute ? AnyShapeStyle(.blue.gradient) : AnyShapeStyle(.gray))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(.white.opacity(0.2), lineWidth: 1)
-                    )
-                    .shadow(color: canExecute ? .blue.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
-                }
-                .disabled(!canExecute)
-                .buttonStyle(.plain)
-                .scaleEffect(canExecute ? 1.0 : 0.95)
-                .animation(.easeInOut(duration: 0.2), value: canExecute)
-            }
-        }
-    }
 
     private var resultsView: some View {
         VStack(alignment: .leading, spacing: 8) {
