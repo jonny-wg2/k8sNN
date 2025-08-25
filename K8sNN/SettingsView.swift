@@ -7,25 +7,34 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // Header
-            HStack {
-                Image(systemName: "gearshape.fill")
-                    .foregroundStyle(.blue)
-                    .font(.title2)
-                Text("Settings")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                
-                Spacer()
-                
-                Button("Done") {
-                    dismiss()
+        VStack(alignment: .leading, spacing: 0) {
+            // Header - Fixed at top
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Image(systemName: "gearshape.fill")
+                        .foregroundStyle(.blue)
+                        .font(.title2)
+                    Text("Settings")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+
+                    Spacer()
+
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
+
+                Divider()
             }
-            
-            Divider()
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .background(.regularMaterial)
+
+            // Scrollable content
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
             
             // Hotkey Settings
             VStack(alignment: .leading, spacing: 12) {
@@ -83,7 +92,21 @@ struct SettingsView: View {
                 }
             }
             .padding(.vertical, 8)
-            
+
+            Divider()
+
+            // Multi-Cluster kubectl Info
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Multi-Cluster kubectl")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+
+                Text("Multi-cluster kubectl functionality is now integrated into the main spotlight interface. Use the toggle at the top to switch between cluster selection and multi-cluster kubectl modes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 8)
+
             Divider()
 
             // Terminal Settings
@@ -106,6 +129,8 @@ struct SettingsView: View {
                 }
             }
             .padding(.vertical, 8)
+
+
 
             Divider()
 
@@ -258,11 +283,12 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
             }
             .padding(.vertical, 8)
-            
-            Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+            }
         }
-        .padding(20)
-        .frame(width: 400, height: 420)
+        .frame(width: 450, height: 600)
         .background(.regularMaterial)
         .onAppear {
             tempHotkey = settingsManager.hotkey
@@ -270,6 +296,7 @@ struct SettingsView: View {
         .onChange(of: settingsManager.isHotkeyEnabled) { _, _ in
             settingsManager.saveSettings()
         }
+
     }
     
     private func startRecording() {
@@ -293,11 +320,12 @@ struct SettingsView: View {
             settingsManager.saveSettings()
         }
     }
-    
+
+
     private func handleKeyEvent(_ event: NSEvent) {
         let modifierFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         var hotkeyString = ""
-        
+
         // Add modifier symbols
         if modifierFlags.contains(.command) {
             hotkeyString += "⌘"
@@ -311,13 +339,13 @@ struct SettingsView: View {
         if modifierFlags.contains(.control) {
             hotkeyString += "⌃"
         }
-        
+
         // Add the key character
         if event.type == .keyDown {
             if let characters = event.charactersIgnoringModifiers?.uppercased() {
                 hotkeyString += characters
                 tempHotkey = hotkeyString
-                
+
                 // Stop recording after a short delay
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     stopRecording()
@@ -325,6 +353,8 @@ struct SettingsView: View {
             }
         }
     }
+
+
 }
 
 #Preview {

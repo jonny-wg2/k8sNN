@@ -21,6 +21,8 @@ enum ClusterSortOrder: String, CaseIterable {
 class SettingsManager: ObservableObject {
     @Published var hotkey: String = "⌘⇧K"
     @Published var isHotkeyEnabled: Bool = true
+    @Published var multiClusterHotkey: String = "⌘⇧L"
+    @Published var isMultiClusterHotkeyEnabled: Bool = true
     @Published var terminalApp: String = "iTerm"
     @Published var customLoginURLs: [String: String] = [:]
     @Published var customCommands: [String: String] = [:]
@@ -48,7 +50,22 @@ class SettingsManager: ObservableObject {
     
     private func loadSettings() {
         hotkey = defaults.string(forKey: "hotkey") ?? "⌘⇧K"
-        isHotkeyEnabled = defaults.bool(forKey: "isHotkeyEnabled")
+
+        // Handle boolean defaults properly - UserDefaults.bool returns false for non-existent keys
+        if defaults.object(forKey: "isHotkeyEnabled") == nil {
+            isHotkeyEnabled = true // Default to enabled
+        } else {
+            isHotkeyEnabled = defaults.bool(forKey: "isHotkeyEnabled")
+        }
+
+        multiClusterHotkey = defaults.string(forKey: "multiClusterHotkey") ?? "⌘⇧L"
+
+        if defaults.object(forKey: "isMultiClusterHotkeyEnabled") == nil {
+            isMultiClusterHotkeyEnabled = true // Default to enabled
+        } else {
+            isMultiClusterHotkeyEnabled = defaults.bool(forKey: "isMultiClusterHotkeyEnabled")
+        }
+
         terminalApp = defaults.string(forKey: "terminalApp") ?? "iTerm"
 
         // Load custom login URLs
@@ -87,10 +104,12 @@ class SettingsManager: ObservableObject {
     
     func saveSettings() {
         let oldHotkey = defaults.string(forKey: "hotkey") ?? "⌘⇧K"
-        let oldEnabled = defaults.bool(forKey: "isHotkeyEnabled")
+        let oldEnabled = defaults.object(forKey: "isHotkeyEnabled") == nil ? true : defaults.bool(forKey: "isHotkeyEnabled")
 
         defaults.set(hotkey, forKey: "hotkey")
         defaults.set(isHotkeyEnabled, forKey: "isHotkeyEnabled")
+        defaults.set(multiClusterHotkey, forKey: "multiClusterHotkey")
+        defaults.set(isMultiClusterHotkeyEnabled, forKey: "isMultiClusterHotkeyEnabled")
         defaults.set(terminalApp, forKey: "terminalApp")
 
         // Save custom login URLs
@@ -117,11 +136,8 @@ class SettingsManager: ObservableObject {
 
         // Only re-register hotkey if it actually changed
         if oldHotkey != hotkey || oldEnabled != isHotkeyEnabled {
-            print("Hotkey settings changed, re-registering...")
-            unregisterHotkey()
-            if isHotkeyEnabled {
-                setupHotkey()
-            }
+            print("Hotkey settings changed: '\(oldHotkey)' -> '\(hotkey)', enabled: \(oldEnabled) -> \(isHotkeyEnabled)")
+            setupHotkey()
         }
     }
 
@@ -318,18 +334,20 @@ class SettingsManager: ObservableObject {
 
         print("Hotkey registered successfully: \(hotkey) with keyCode: \(keyCode), modifiers: \(modifiers)")
     }
-    
+
     private func unregisterHotkey() {
         if let hotkeyRef = hotkeyRef {
             UnregisterEventHotKey(hotkeyRef)
             self.hotkeyRef = nil
         }
-        
+
         if let eventHandler = eventHandler {
             RemoveEventHandler(eventHandler)
             self.eventHandler = nil
         }
     }
+
+
     
     private func parseHotkey(_ hotkey: String) -> (keyCode: Int, modifiers: Int) {
         var modifiers = 0

@@ -201,6 +201,322 @@ struct CompactGlassButton<Label: View>: View {
     }
 }
 
+// MARK: - Floating Multi-Cluster kubectl Interface
+
+struct FloatingMultiClusterView: View {
+    @EnvironmentObject var kubernetesManager: KubernetesManager
+    @EnvironmentObject var settingsManager: SettingsManager
+    @State private var commandText: String = ""
+    @State private var results: [ClusterResult] = []
+    @State private var isExecuting: Bool = false
+    @State private var validationError: String? = nil
+    @Environment(\.dismiss) private var dismiss
+
+    var authenticatedClusters: [KubernetesCluster] {
+        kubernetesManager.clusters.filter { $0.isAuthenticated }
+    }
+
+    var body: some View {
+        VStack(spacing: 20) {
+            // Command input bar (similar to spotlight search)
+            commandInputBar
+
+            // Results grid
+            if !results.isEmpty {
+                resultsGrid
+            }
+        }
+        .padding(24)
+        .frame(width: 800)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(.white.opacity(0.2), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.3), radius: 30, x: 0, y: 15)
+        .onAppear {
+            validateCommand(commandText)
+        }
+        .onKeyPress(.escape) {
+            dismiss()
+            return .handled
+        }
+    }
+
+    private var commandInputBar: some View {
+        HStack(spacing: 0) {
+            // kubectl prefix
+            Text("kubectl")
+                .font(.system(.title3, design: .monospaced))
+                .foregroundStyle(.blue)
+                .fontWeight(.semibold)
+                .padding(.leading, 20)
+                .padding(.vertical, 16)
+                .background(.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            // Command input
+            TextField("get pods --all-namespaces", text: $commandText)
+                .textFieldStyle(.plain)
+                .font(.system(.title3, design: .monospaced))
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(validationError != nil ? .red.opacity(0.5) : .clear, lineWidth: 1)
+                )
+                .onChange(of: commandText) { _, newValue in
+                    validateCommand(newValue)
+                }
+                .onSubmit {
+                    if canExecute {
+                        executeCommand()
+                    }
+                }
+
+            // Execute button
+            if isExecuting {
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .scaleEffect(0.9)
+                        .tint(.blue)
+                    Text("Running...")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .background(.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            } else {
+                Button(action: executeCommand) {
+                    HStack(spacing: 8) {
+                        Image(systemName: canExecute ? "play.fill" : "exclamationmark.triangle.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("Execute")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(canExecute ? AnyShapeStyle(.blue.gradient) : AnyShapeStyle(.gray))
+                    )
+                }
+                .disabled(!canExecute)
+                .buttonStyle(.plain)
+                .scaleEffect(canExecute ? 1.0 : 0.95)
+                .animation(.easeInOut(duration: 0.2), value: canExecute)
+            }
+        }
+        .background(
+            VisualEffectView(material: .menu, blendingMode: .withinWindow)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(.white.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    private var resultsGrid: some View {
+        LazyVGrid(columns: [
+            GridItem(.flexible(), spacing: 16),
+            GridItem(.flexible(), spacing: 16)
+        ], spacing: 16) {
+            ForEach(results) { result in
+                FloatingClusterResultView(result: result)
+            }
+        }
+    }
+
+    private var canExecute: Bool {
+        !commandText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !authenticatedClusters.isEmpty &&
+        !isExecuting &&
+        validationError == nil
+    }
+
+    private func validateCommand(_ command: String) {
+        guard !command.isEmpty else {
+            validationError = nil
+            return
+        }
+
+        let validation = settingsManager.validateKubectlCommand(command)
+        validationError = validation.isValid ? nil : validation.errorMessage
+    }
+
+    private func executeCommand() {
+        let trimmedCommand = commandText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedCommand.isEmpty else { return }
+
+        isExecuting = true
+        results = []
+
+        // Create initial results for all clusters
+        results = authenticatedClusters.map { cluster in
+            ClusterResult(clusterName: cluster.name, command: trimmedCommand, status: .running)
+        }
+
+        // Execute commands in parallel
+        for (index, cluster) in authenticatedClusters.enumerated() {
+            executeCommandOnCluster(cluster: cluster, command: trimmedCommand, resultIndex: index)
+        }
+    }
+
+    private func executeCommandOnCluster(cluster: KubernetesCluster, command: String, resultIndex: Int) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: findKubectlPath())
+            process.arguments = ["--context", cluster.name] + command.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+
+            let outputPipe = Pipe()
+            let errorPipe = Pipe()
+            process.standardOutput = outputPipe
+            process.standardError = errorPipe
+
+            let startTime = Date()
+
+            do {
+                try process.run()
+                process.waitUntilExit()
+
+                let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+
+                let output = String(data: outputData, encoding: .utf8) ?? ""
+                let errorOutput = String(data: errorData, encoding: .utf8) ?? ""
+                let duration = Date().timeIntervalSince(startTime)
+
+                DispatchQueue.main.async {
+                    if resultIndex < self.results.count {
+                        self.results[resultIndex].output = output
+                        self.results[resultIndex].errorOutput = errorOutput
+                        self.results[resultIndex].duration = duration
+                        self.results[resultIndex].status = process.terminationStatus == 0 ? .success : .failed
+
+                        // Check if all commands are done
+                        if self.results.allSatisfy({ $0.status != .running }) {
+                            self.isExecuting = false
+                        }
+                    }
+                }
+
+            } catch {
+                DispatchQueue.main.async {
+                    if resultIndex < self.results.count {
+                        self.results[resultIndex].errorOutput = "Failed to execute: \(error.localizedDescription)"
+                        self.results[resultIndex].status = .failed
+                        self.results[resultIndex].duration = Date().timeIntervalSince(startTime)
+
+                        // Check if all commands are done
+                        if self.results.allSatisfy({ $0.status != .running }) {
+                            self.isExecuting = false
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func findKubectlPath() -> String {
+        let commonPaths = [
+            "/usr/local/bin/kubectl",
+            "/opt/homebrew/bin/kubectl",
+            "/usr/bin/kubectl"
+        ]
+
+        for path in commonPaths {
+            if FileManager.default.fileExists(atPath: path) {
+                return path
+            }
+        }
+
+        return "/usr/local/bin/kubectl" // fallback
+    }
+}
+
+struct FloatingClusterResultView: View {
+    let result: ClusterResult
+    @State private var isExpanded: Bool = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack {
+                Image(systemName: statusIcon)
+                    .foregroundStyle(statusColor)
+                    .font(.system(size: 16, weight: .medium))
+
+                Text(result.clusterName)
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+
+                Spacer()
+
+                if result.duration > 0 {
+                    Text("\(String(format: "%.1fs", result.duration))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+                }
+            }
+
+            // Content
+            if !result.displayOutput.isEmpty {
+                ScrollView {
+                    Text(result.displayOutput)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.primary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 200)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.quaternary.opacity(0.2), in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding(16)
+        .background(
+            VisualEffectView(material: .menu, blendingMode: .withinWindow)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(.white.opacity(0.2), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+    }
+
+    private var statusIcon: String {
+        switch result.status {
+        case .running:
+            return "clock"
+        case .success:
+            return "checkmark.circle.fill"
+        case .failed:
+            return "xmark.circle.fill"
+        }
+    }
+
+    private var statusColor: Color {
+        switch result.status {
+        case .running:
+            return .blue
+        case .success:
+            return .green
+        case .failed:
+            return .red
+        }
+    }
+}
+
 // MARK: - Multi-Cluster Command Components
 
 struct SimpleMultiClusterView: View {

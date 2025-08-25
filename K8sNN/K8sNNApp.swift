@@ -57,6 +57,8 @@ struct K8sNNApp: App {
             SpotlightControllerInlined.shared.show(kubernetesManager: kubernetesManager, settingsManager: settingsManager)
         }
 
+
+
         // Listen for hide spotlight
         NotificationCenter.default.addObserver(
             forName: .hideSpotlight,
@@ -123,6 +125,41 @@ struct K8sNNApp: App {
         }
     }
     */
+
+    private func showFloatingMultiClusterView() {
+        // Create a floating window for multi-cluster kubectl
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 850, height: 600),
+            styleMask: [.borderless, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+
+        window.level = .floating
+        window.backgroundColor = NSColor.clear
+        window.isOpaque = false
+        window.hasShadow = true
+        window.center()
+
+        // Create the content view
+        let contentView = ZStack {
+            // Transparent background that can be clicked to dismiss
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    window.close()
+                }
+
+            // Main floating interface
+            FloatingMultiClusterView()
+                .environmentObject(kubernetesManager)
+                .environmentObject(settingsManager)
+        }
+
+        window.contentView = NSHostingView(rootView: contentView)
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
 }
 // Inline controller to avoid target linkage issues
 final class SpotlightControllerInlined {
