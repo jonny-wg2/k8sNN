@@ -48,15 +48,6 @@ K8sNN puts all your clusters in your menu bar with:
 ### Quick Access (Hotkeys)
 
 - **⌘⇧K**: Open cluster selector - type to search, Enter to select
-- **⌘⇧L**: Open multi-cluster command interface
-
-### Multi-Cluster Commands
-
-1. Press **⌘⇧L** or click "Multi-Cluster kubectl" in menu
-2. Select clusters you want to target
-3. Type your command (e.g., `get pods`, `get nodes`)
-4. Choose command type: `kubectl` or `flux`
-5. Press Enter to run across all selected clusters
 
 ### Settings & Customization
 
@@ -104,8 +95,7 @@ K8sNN automatically:
 ```bash
 git clone https://github.com/jonny-wg2/k8sNN.git
 cd k8sNN
-./build.sh
-cp -r build/Build/Products/Release/K8sNN.app /Applications/
+./rebuild.sh
 ```
 
 Requires Xcode 15.0+ and macOS 14.0+.
