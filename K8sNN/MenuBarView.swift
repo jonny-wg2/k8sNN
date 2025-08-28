@@ -200,9 +200,9 @@ struct MenuBarView: View {
     }
 
     private func showMultiClusterView() {
-        // Create a window with glass effect styling using settings-based size
+        // Create a window with glass effect styling
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: settingsManager.multiClusterWindowWidth, height: settingsManager.multiClusterWindowHeight),
+            contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700),
             styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -218,7 +218,7 @@ struct MenuBarView: View {
         window.isOpaque = false
         window.hasShadow = true
         window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
+        window.titleVisibility = NSWindow.TitleVisibility.hidden
 
         // Create the content view with proper environment objects and glass background
         let contentView = ZStack {
@@ -247,7 +247,7 @@ struct MenuBarView: View {
         }
 
         window.contentView = NSHostingView(rootView: contentView)
-        window.makeKeyAndOrderFront(nil)
+        window.makeKeyAndOrderFront(window)
         NSApp.activate(ignoringOtherApps: true)
     }
 }

@@ -251,16 +251,7 @@ struct SpotlightOverlay: View {
         .onChange(of: currentMode) { _, _ in
             updateWindowSize()
         }
-        .onChange(of: settingsManager.multiClusterWindowWidth) { _, _ in
-            if currentMode == .multiCluster {
-                updateWindowSize()
-            }
-        }
-        .onChange(of: settingsManager.multiClusterWindowHeight) { _, _ in
-            if currentMode == .multiCluster {
-                updateWindowSize()
-            }
-        }
+
         .onKeyPress(.escape) {
             NotificationCenter.default.post(name: .hideSpotlight, object: "escKeySwiftUI")
             return .handled
@@ -479,21 +470,20 @@ struct SpotlightOverlay: View {
 
             // Results
             if !executionResults.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
+                GeometryReader { geo in
+                    let layout = calculateOverlayTileLayout(count: executionResults.count, size: geo.size, spacing: 12)
                     ScrollView {
-                        LazyVGrid(columns: [
-                            GridItem(.flexible(), spacing: 12),
-                            GridItem(.flexible(), spacing: 12)
-                        ], spacing: 12) {
+                        LazyVGrid(columns: layout.columns, spacing: 12) {
                             ForEach(executionResults) { result in
                                 MultiClusterResultRow(result: result)
+                                    .frame(height: layout.tileHeight)
                             }
                         }
                         .padding(.horizontal, 20)
                         .padding(.bottom, 20)
                     }
-                    .frame(maxHeight: .infinity)
                 }
+                .frame(maxHeight: .infinity)
                 .padding(.top, 12)
             }
         }
@@ -515,6 +505,31 @@ struct SpotlightOverlay: View {
             return .clear
         }
     }
+    // MARK: - Overlay Tiled Grid Layout Helper
+    private func calculateOverlayTileLayout(count: Int, size: CGSize, spacing: CGFloat) -> (columns: [GridItem], tileHeight: CGFloat) {
+        guard count > 0 else {
+            return (columns: [GridItem(.flexible())], tileHeight: 200)
+        }
+
+        let cols: Int
+        switch count {
+        case 1: cols = 1
+        case 2...4: cols = 2
+        case 5...9: cols = 3
+        default: cols = 4
+        }
+
+        let columns = Array(repeating: GridItem(.flexible(), spacing: spacing), count: cols)
+        let rows = Int(ceil(Double(count) / Double(cols)))
+
+        // Leave room for paddings and header areas
+        let availableHeight = max(400, size.height - 120)
+        let rawHeight = (availableHeight - CGFloat(rows - 1) * spacing)
+        let tileHeight = max(160, min(rawHeight / CGFloat(rows), 420))
+
+        return (columns: columns, tileHeight: tileHeight)
+    }
+
 
     private func authenticateSelectedCluster() {
         NSLog("[K8sNN] authenticateSelectedCluster() called")
@@ -651,8 +666,8 @@ struct SpotlightOverlay: View {
         // Get the current window
         guard let window = NSApp.keyWindow as? SpotlightOverlayWindow else { return }
 
-        let width: CGFloat = currentMode == .multiCluster ? settingsManager.multiClusterWindowWidth : 600
-        let height: CGFloat = currentMode == .multiCluster ? settingsManager.multiClusterWindowHeight : 400
+        let width: CGFloat = currentMode == .multiCluster ? 1000 : 600
+        let height: CGFloat = currentMode == .multiCluster ? 700 : 400
 
         window.updateSize(width: width, height: height)
     }

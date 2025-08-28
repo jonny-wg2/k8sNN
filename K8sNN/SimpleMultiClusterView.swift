@@ -21,7 +21,7 @@ struct SimpleMultiClusterView: View {
             resultsView
         }
         .padding(20)
-        .frame(width: settingsManager.multiClusterWindowWidth, height: settingsManager.multiClusterWindowHeight)
+        .frame(minWidth: 800, maxWidth: .infinity, minHeight: 600, maxHeight: .infinity)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 
@@ -156,26 +156,11 @@ struct SimpleMultiClusterView: View {
         VStack(alignment: .leading, spacing: 8) {
             if !results.isEmpty {
                 GeometryReader { geo in
-                    let columns = [
-                        GridItem(.flexible(), spacing: 12),
-                        GridItem(.flexible(), spacing: 12)
-                    ]
-                    let rows = max(1, Int(ceil(Double(results.count) / 2.0)))
-                    let verticalSpacing: CGFloat = 12
-                    let totalSpacing = CGFloat(max(0, rows - 1)) * verticalSpacing
-                    let availableHeight = max(0, geo.size.height - totalSpacing)
-                    let cardHeight = max(140, availableHeight / CGFloat(rows))
-
-                    ScrollView {
-                        LazyVGrid(columns: columns, spacing: verticalSpacing) {
-                            ForEach(results) { result in
-                                ClusterResultView(result: result)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: cardHeight)
-                            }
-                        }
-                        .padding(.bottom, 4)
-                    }
+                    DynamicTiledLayout(
+                        results: results,
+                        availableSize: geo.size,
+                        spacing: 8
+                    )
                 }
             }
         }
@@ -364,6 +349,124 @@ struct CommandTypeSegmentedControl: View {
                         .stroke(.quaternary, lineWidth: 0.5)
                 }
                 .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
+        }
+    }
+}
+
+// MARK: - Dynamic Tiled Layout
+
+struct DynamicTiledLayout: View {
+    let results: [ClusterResult]
+    let availableSize: CGSize
+    let spacing: CGFloat
+
+    var body: some View {
+        let config = calculateLayout()
+
+        ScrollView {
+            LazyVGrid(columns: config.columns, spacing: spacing) {
+                ForEach(results) { result in
+                    TiledClusterResultView(result: result)
+                        .frame(height: config.tileHeight)
+                }
+            }
+            .padding(.bottom, spacing)
+        }
+    }
+
+    private func calculateLayout() -> (columns: [GridItem], tileHeight: CGFloat) {
+        let count = results.count
+        guard count > 0 else {
+            return (columns: [], tileHeight: 200)
+        }
+
+        // Simple layout calculation to avoid compiler hangs
+        let cols: Int
+        switch count {
+        case 1:
+            cols = 1
+        case 2...4:
+            cols = 2
+        case 5...9:
+            cols = 3
+        default:
+            cols = 4
+        }
+
+        let columns = Array(repeating: GridItem(.flexible(), spacing: spacing), count: cols)
+        let rows = Int(ceil(Double(count) / Double(cols)))
+        let availableHeight = max(400, availableSize.height - 100) // Leave some padding
+        let tileHeight = max(200, (availableHeight - CGFloat(rows - 1) * spacing) / CGFloat(rows))
+
+        return (columns: columns, tileHeight: min(tileHeight, 400))
+    }
+}
+
+// MARK: - Tiled Cluster Result View
+
+struct TiledClusterResultView: View {
+    let result: ClusterResult
+    @State private var isExpanded: Bool = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header
+            HStack {
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 8, height: 8)
+
+                Text(result.clusterName)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+
+                if result.duration > 0 {
+                    Text("(\(String(format: "%.1fs", result.duration)))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button(action: { isExpanded.toggle() }) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .foregroundStyle(.secondary)
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 8))
+
+            // Content
+            if isExpanded && !result.displayOutput.isEmpty {
+                ScrollView {
+                    Text(result.displayOutput)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.primary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(minHeight: 120)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.quaternary.opacity(0.2), in: RoundedRectangle(cornerRadius: 6))
+            }
+        }
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(statusColor.opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    private var statusColor: Color {
+        switch result.status {
+        case .running: return .blue
+        case .success: return .green
+        case .failed: return .red
         }
     }
 }

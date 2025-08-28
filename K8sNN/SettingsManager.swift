@@ -34,10 +34,6 @@ class SettingsManager: ObservableObject {
     @Published var defaultCommandType: CommandType = .kubectl
     @Published var autoStartOnLogin: Bool = true
 
-    // Multi-cluster window size settings
-    @Published var multiClusterWindowWidth: Double = 1000
-    @Published var multiClusterWindowHeight: Double = 700
-
     private let defaults = UserDefaults.standard
     private var hotkeyRef: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
@@ -113,16 +109,7 @@ class SettingsManager: ObservableObject {
             menuBarHeight = savedHeight
         }
 
-        // Load multi-cluster window size
-        let savedMultiClusterWidth = defaults.double(forKey: "multiClusterWindowWidth")
-        if savedMultiClusterWidth > 0 {
-            multiClusterWindowWidth = savedMultiClusterWidth
-        }
 
-        let savedMultiClusterHeight = defaults.double(forKey: "multiClusterWindowHeight")
-        if savedMultiClusterHeight > 0 {
-            multiClusterWindowHeight = savedMultiClusterHeight
-        }
 
         // Load default command type
         if let commandTypeString = defaults.string(forKey: "defaultCommandType"),
@@ -166,10 +153,6 @@ class SettingsManager: ObservableObject {
 
         // Save menu bar height
         defaults.set(menuBarHeight, forKey: "menuBarHeight")
-
-        // Save multi-cluster window size
-        defaults.set(multiClusterWindowWidth, forKey: "multiClusterWindowWidth")
-        defaults.set(multiClusterWindowHeight, forKey: "multiClusterWindowHeight")
 
         // Save safety setting
         defaults.set(preventDeleteCommands, forKey: "preventDeleteCommands")
