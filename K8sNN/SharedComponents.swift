@@ -247,6 +247,7 @@ struct FloatingMultiClusterView: View {
     @State private var results: [ClusterResult] = []
     @State private var isExecuting: Bool = false
     @State private var validationError: String? = nil
+    @State private var selectedCommandType: CommandType = .kubectl
     @Environment(\.dismiss) private var dismiss
 
     var authenticatedClusters: [KubernetesCluster] {
@@ -282,17 +283,79 @@ struct FloatingMultiClusterView: View {
 
     private var commandInputBar: some View {
         HStack(spacing: 0) {
-            // kubectl prefix
-            Text("kubectl")
-                .font(.system(.title3, design: .monospaced))
-                .foregroundStyle(.blue)
-                .fontWeight(.semibold)
-                .padding(.leading, 20)
+            // Elegant command type selector with liquid glass effect
+            Menu {
+                ForEach(CommandType.allCases, id: \.self) { commandType in
+                    Button(action: {
+                        selectedCommandType = commandType
+                        validateCommand(commandText)
+                    }) {
+                        HStack {
+                            Text(commandType.displayName)
+                                .font(.system(.body, design: .monospaced))
+                                .fontWeight(.medium)
+                            Spacer()
+                            if selectedCommandType == commandType {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.blue)
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background {
+                            if selectedCommandType == commandType {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(.blue.opacity(0.1))
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(selectedCommandType.displayName)
+                        .font(.system(.title3, design: .monospaced))
+                        .foregroundStyle(.blue)
+                        .fontWeight(.semibold)
+
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.blue.opacity(0.7))
+                        .scaleEffect(0.8)
+                }
+                .padding(.horizontal, 16)
                 .padding(.vertical, 16)
-                .background(.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .background {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(.blue.opacity(0.08))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(.blue.opacity(0.2), lineWidth: 0.5)
+                        }
+                        .background {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                                .shadow(color: .blue.opacity(0.1), radius: 8, x: 0, y: 2)
+                        }
+                }
+            }
+            .buttonStyle(.plain)
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .background {
+                // Custom menu background with liquid glass effect
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .shadow(color: .black.opacity(0.1), radius: 12, x: 0, y: 4)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(.primary.opacity(0.1), lineWidth: 0.5)
+                    }
+            }
 
             // Command input
-            TextField("get pods --all-namespaces", text: $commandText)
+            TextField(selectedCommandType.placeholderCommand, text: $commandText)
                 .textFieldStyle(.plain)
                 .font(.system(.title3, design: .monospaced))
                 .padding(.horizontal, 20)
@@ -381,7 +444,7 @@ struct FloatingMultiClusterView: View {
             return
         }
 
-        let validation = settingsManager.validateKubectlCommand(command)
+        let validation = settingsManager.validateCommand(command, type: selectedCommandType)
         validationError = validation.isValid ? nil : validation.errorMessage
     }
 
@@ -394,20 +457,33 @@ struct FloatingMultiClusterView: View {
 
         // Create initial results for all clusters
         results = authenticatedClusters.map { cluster in
-            ClusterResult(clusterName: cluster.name, command: trimmedCommand, status: .running)
+            ClusterResult(clusterName: cluster.name, command: trimmedCommand, commandType: selectedCommandType, status: .running)
         }
 
         // Execute commands in parallel
         for (index, cluster) in authenticatedClusters.enumerated() {
-            executeCommandOnCluster(cluster: cluster, command: trimmedCommand, resultIndex: index)
+            executeCommandOnCluster(cluster: cluster, command: trimmedCommand, resultIndex: index, commandType: selectedCommandType)
         }
     }
 
-    private func executeCommandOnCluster(cluster: KubernetesCluster, command: String, resultIndex: Int) {
+    private func executeCommandOnCluster(cluster: KubernetesCluster, command: String, resultIndex: Int, commandType: CommandType) {
         DispatchQueue.global(qos: .userInitiated).async {
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: findKubectlPath())
-            process.arguments = ["--context", cluster.name] + command.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+            let commandPath = self.settingsManager.findCommandPath(for: commandType)
+            process.executableURL = URL(fileURLWithPath: commandPath)
+
+            // Build arguments based on command type
+            let commandComponents = command.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+            var args: [String] = []
+
+            switch commandType {
+            case .kubectl:
+                args = ["--context", cluster.name] + commandComponents
+            case .flux:
+                args = ["--context", cluster.name] + commandComponents
+            }
+
+            process.arguments = args
 
             let outputPipe = Pipe()
             let errorPipe = Pipe()
@@ -459,10 +535,12 @@ struct FloatingMultiClusterView: View {
     }
 
     private func findKubectlPath() -> String {
+        // Common kubectl locations
         let commonPaths = [
             "/usr/local/bin/kubectl",
             "/opt/homebrew/bin/kubectl",
-            "/usr/bin/kubectl"
+            "/usr/bin/kubectl",
+            "/bin/kubectl"
         ]
 
         for path in commonPaths {
@@ -471,7 +549,34 @@ struct FloatingMultiClusterView: View {
             }
         }
 
-        return "/usr/local/bin/kubectl" // fallback
+        // Try to find kubectl in PATH
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+        process.arguments = ["kubectl"]
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+
+            if process.terminationStatus == 0 {
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                if let output = String(data: data, encoding: .utf8) {
+                    let path = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !path.isEmpty {
+                        return path
+                    }
+                }
+            }
+        } catch {
+            // Fall back to default
+        }
+
+        // Default fallback
+        return "/usr/local/bin/kubectl"
     }
 }
 
@@ -563,6 +668,7 @@ struct SimpleMultiClusterView: View {
     @State private var results: [ClusterResult] = []
     @State private var isExecuting: Bool = false
     @State private var validationError: String? = nil
+    @State private var selectedCommandType: CommandType = .kubectl
 
     var authenticatedClusters: [KubernetesCluster] {
         kubernetesManager.clusters.filter { $0.isAuthenticated }
@@ -666,15 +772,68 @@ struct SimpleMultiClusterView: View {
             }
 
             HStack(spacing: 0) {
-                Text("kubectl")
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundStyle(.blue)
-                    .fontWeight(.medium)
-                    .padding(.leading, 16)
-                    .padding(.vertical, 12)
-                    .background(.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                // Elegant command type selector with liquid glass effect
+                Menu {
+                    ForEach(CommandType.allCases, id: \.self) { commandType in
+                        Button(action: {
+                            selectedCommandType = commandType
+                            validateCommand(commandText)
+                        }) {
+                            HStack {
+                                Text(commandType.displayName)
+                                    .font(.system(.body, design: .monospaced))
+                                    .fontWeight(.medium)
+                                Spacer()
+                                if selectedCommandType == commandType {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(.blue)
+                                        .font(.system(size: 11, weight: .medium))
+                                }
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background {
+                                if selectedCommandType == commandType {
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .fill(.blue.opacity(0.1))
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(selectedCommandType.displayName)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(.blue)
+                            .fontWeight(.medium)
 
-                TextField("get pods --all-namespaces", text: $commandText)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.blue.opacity(0.7))
+                            .scaleEffect(0.8)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(.blue.opacity(0.06))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(.blue.opacity(0.15), lineWidth: 0.5)
+                            }
+                            .background {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(.ultraThinMaterial)
+                                    .shadow(color: .blue.opacity(0.08), radius: 6, x: 0, y: 1)
+                            }
+                    }
+                }
+                .buttonStyle(.plain)
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+
+                TextField(selectedCommandType.placeholderCommand, text: $commandText)
                     .textFieldStyle(.plain)
                     .font(.system(.body, design: .monospaced))
                     .padding(.horizontal, 16)
@@ -785,7 +944,7 @@ struct SimpleMultiClusterView: View {
             return
         }
 
-        let validation = settingsManager.validateKubectlCommand(command)
+        let validation = settingsManager.validateCommand(command, type: selectedCommandType)
         validationError = validation.isValid ? nil : validation.errorMessage
     }
 
@@ -798,20 +957,33 @@ struct SimpleMultiClusterView: View {
 
         // Create initial results for all clusters
         results = authenticatedClusters.map { cluster in
-            ClusterResult(clusterName: cluster.name, command: trimmedCommand, status: .running)
+            ClusterResult(clusterName: cluster.name, command: trimmedCommand, commandType: selectedCommandType, status: .running)
         }
 
         // Execute commands in parallel
         for (index, cluster) in authenticatedClusters.enumerated() {
-            executeCommandOnCluster(cluster: cluster, command: trimmedCommand, resultIndex: index)
+            executeCommandOnCluster(cluster: cluster, command: trimmedCommand, resultIndex: index, commandType: selectedCommandType)
         }
     }
 
-    private func executeCommandOnCluster(cluster: KubernetesCluster, command: String, resultIndex: Int) {
+    private func executeCommandOnCluster(cluster: KubernetesCluster, command: String, resultIndex: Int, commandType: CommandType) {
         DispatchQueue.global(qos: .userInitiated).async {
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: findKubectlPath())
-            process.arguments = ["--context", cluster.name] + command.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+            let commandPath = self.settingsManager.findCommandPath(for: commandType)
+            process.executableURL = URL(fileURLWithPath: commandPath)
+
+            // Build arguments based on command type
+            let commandComponents = command.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+            var args: [String] = []
+
+            switch commandType {
+            case .kubectl:
+                args = ["--context", cluster.name] + commandComponents
+            case .flux:
+                args = ["--context", cluster.name] + commandComponents
+            }
+
+            process.arguments = args
 
             let outputPipe = Pipe()
             let errorPipe = Pipe()
@@ -863,10 +1035,12 @@ struct SimpleMultiClusterView: View {
     }
 
     private func findKubectlPath() -> String {
+        // Common kubectl locations
         let commonPaths = [
             "/usr/local/bin/kubectl",
             "/opt/homebrew/bin/kubectl",
-            "/usr/bin/kubectl"
+            "/usr/bin/kubectl",
+            "/bin/kubectl"
         ]
 
         for path in commonPaths {
@@ -875,7 +1049,34 @@ struct SimpleMultiClusterView: View {
             }
         }
 
-        return "/usr/local/bin/kubectl" // fallback
+        // Try to find kubectl in PATH
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+        process.arguments = ["kubectl"]
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+
+            if process.terminationStatus == 0 {
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                if let output = String(data: data, encoding: .utf8) {
+                    let path = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !path.isEmpty {
+                        return path
+                    }
+                }
+            }
+        } catch {
+            // Fall back to default
+        }
+
+        // Default fallback
+        return "/usr/local/bin/kubectl"
     }
 }
 
@@ -883,6 +1084,7 @@ struct ClusterResult: Identifiable {
     let id = UUID()
     let clusterName: String
     let command: String
+    let commandType: CommandType
     var output: String = ""
     var errorOutput: String = ""
     var status: ResultStatus = .running

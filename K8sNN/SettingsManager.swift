@@ -30,6 +30,7 @@ class SettingsManager: ObservableObject {
     @Published var menuBarWidth: Double = 420.0
     @Published var menuBarHeight: Double = 500.0
     @Published var preventDeleteCommands: Bool = true
+    @Published var defaultCommandType: CommandType = .kubectl
 
     // Multi-cluster window size settings
     @Published var multiClusterWindowWidth: Double = 1000
@@ -115,6 +116,12 @@ class SettingsManager: ObservableObject {
         if savedMultiClusterHeight > 0 {
             multiClusterWindowHeight = savedMultiClusterHeight
         }
+
+        // Load default command type
+        if let commandTypeString = defaults.string(forKey: "defaultCommandType"),
+           let commandType = CommandType(rawValue: commandTypeString) {
+            defaultCommandType = commandType
+        }
     }
     
     func saveSettings() {
@@ -153,6 +160,9 @@ class SettingsManager: ObservableObject {
         // Save safety setting
         defaults.set(preventDeleteCommands, forKey: "preventDeleteCommands")
 
+        // Save default command type
+        defaults.set(defaultCommandType.rawValue, forKey: "defaultCommandType")
+
         // Only re-register hotkey if it actually changed
         if oldHotkey != hotkey || oldEnabled != isHotkeyEnabled {
             print("Hotkey settings changed: '\(oldHotkey)' -> '\(hotkey)', enabled: \(oldEnabled) -> \(isHotkeyEnabled)")
@@ -162,7 +172,7 @@ class SettingsManager: ObservableObject {
 
     // MARK: - Command Validation
 
-    func validateKubectlCommand(_ command: String) -> (isValid: Bool, errorMessage: String?) {
+    func validateCommand(_ command: String, type: CommandType) -> (isValid: Bool, errorMessage: String?) {
         let trimmedCommand = command.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Check if command is empty
@@ -183,6 +193,14 @@ class SettingsManager: ObservableObject {
         }
 
         return (true, nil)
+    }
+
+    func validateKubectlCommand(_ command: String) -> (isValid: Bool, errorMessage: String?) {
+        return validateCommand(command, type: .kubectl)
+    }
+
+    func validateFluxCommand(_ command: String) -> (isValid: Bool, errorMessage: String?) {
+        return validateCommand(command, type: .flux)
     }
 
     // MARK: - Custom Login URL Management
@@ -697,6 +715,84 @@ class SettingsManager: ObservableObject {
 
         NSLog("[K8sNN] All fallback methods failed")
         return false
+    }
+
+    // MARK: - Command Path Detection
+
+    func findCommandPath(for commandType: CommandType) -> String {
+        switch commandType {
+        case .kubectl:
+            return findKubectlPath()
+        case .flux:
+            return findFluxPath()
+        }
+    }
+
+    private func findKubectlPath() -> String {
+        // Common kubectl installation paths
+        let possiblePaths = [
+            "/usr/local/bin/kubectl",
+            "/opt/homebrew/bin/kubectl",
+            "/usr/bin/kubectl",
+            "/bin/kubectl"
+        ]
+
+        for path in possiblePaths {
+            if FileManager.default.fileExists(atPath: path) {
+                return path
+            }
+        }
+
+        // Try to find kubectl in PATH
+        return findCommandInPath("kubectl") ?? "/usr/local/bin/kubectl"
+    }
+
+    private func findFluxPath() -> String {
+        // Common flux installation paths
+        let possiblePaths = [
+            "/usr/local/bin/flux",
+            "/opt/homebrew/bin/flux",
+            "/usr/bin/flux",
+            "/bin/flux"
+        ]
+
+        for path in possiblePaths {
+            if FileManager.default.fileExists(atPath: path) {
+                return path
+            }
+        }
+
+        // Try to find flux in PATH
+        return findCommandInPath("flux") ?? "/usr/local/bin/flux"
+    }
+
+    private func findCommandInPath(_ commandName: String) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+        process.arguments = [commandName]
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+
+            if process.terminationStatus == 0 {
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                if let output = String(data: data, encoding: .utf8) {
+                    let path = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !path.isEmpty {
+                        return path
+                    }
+                }
+            }
+        } catch {
+            // Fall back to nil
+        }
+
+        return nil
     }
 }
 

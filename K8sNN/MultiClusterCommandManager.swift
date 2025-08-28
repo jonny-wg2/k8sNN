@@ -22,29 +22,29 @@ class MultiClusterCommandManager: ObservableObject {
     
     // MARK: - Command Execution
     
-    func executeCommand(_ command: String, on clusterNames: [String]) {
+    func executeCommand(_ command: String, on clusterNames: [String], commandType: CommandType = .kubectl) {
         guard !isExecuting else {
             NSLog("[MultiClusterCommandManager] Already executing a command")
             return
         }
-        
+
         guard !clusterNames.isEmpty else {
             NSLog("[MultiClusterCommandManager] No clusters selected")
             return
         }
-        
-        NSLog("[MultiClusterCommandManager] Executing command '\(command)' on \(clusterNames.count) clusters")
-        
-        let multiClusterCommand = MultiClusterCommand(command: command, targetClusters: clusterNames)
-        let session = CommandExecutionSession(command: command, targetClusters: clusterNames)
-        
+
+        NSLog("[MultiClusterCommandManager] Executing \(commandType.displayName) command '\(command)' on \(clusterNames.count) clusters")
+
+        let multiClusterCommand = MultiClusterCommand(command: command, targetClusters: clusterNames, commandType: commandType)
+        let session = CommandExecutionSession(command: command, targetClusters: clusterNames, commandType: commandType)
+
         // Update state
         isExecuting = true
         currentSession = session
-        
+
         // Add to history
         addToHistory(multiClusterCommand)
-        
+
         // Execute in parallel
         executeCommandInParallel(session: session)
     }
@@ -66,7 +66,8 @@ class MultiClusterCommandManager: ObservableObject {
                 
                 let result = await executeCommandOnCluster(
                     command: session.command,
-                    clusterName: clusterName
+                    clusterName: clusterName,
+                    commandType: session.commandType
                 )
                 
                 await MainActor.run {
@@ -91,20 +92,32 @@ class MultiClusterCommandManager: ObservableObject {
         }
     }
     
-    private func executeCommandOnCluster(command: String, clusterName: String) async -> ClusterCommandResult {
-        var result = ClusterCommandResult(clusterName: clusterName, command: command)
+    private func executeCommandOnCluster(command: String, clusterName: String, commandType: CommandType) async -> ClusterCommandResult {
+        var result = ClusterCommandResult(clusterName: clusterName, command: command, commandType: commandType)
 
         return await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 let process = Process()
-                process.executableURL = URL(fileURLWithPath: self.findKubectlPath())
-                
+                let commandPath = self.findCommandPath(for: commandType)
+                process.executableURL = URL(fileURLWithPath: commandPath)
+
                 // Parse command and build arguments
                 let commandComponents = command.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-                var args = ["--context", clusterName]
-                args.append(contentsOf: commandComponents)
-                args.append("--request-timeout=\(Int(self.defaultTimeout))s")
-                
+                var args: [String] = []
+
+                // Add context argument for kubectl, namespace for flux
+                switch commandType {
+                case .kubectl:
+                    args = ["--context", clusterName]
+                    args.append(contentsOf: commandComponents)
+                    args.append("--request-timeout=\(Int(self.defaultTimeout))s")
+                case .flux:
+                    // Flux uses --context for kubeconfig context
+                    args = ["--context", clusterName]
+                    args.append(contentsOf: commandComponents)
+                    args.append("--timeout=\(Int(self.defaultTimeout))s")
+                }
+
                 process.arguments = args
                 
                 let outputPipe = Pipe()
@@ -275,12 +288,22 @@ class MultiClusterCommandManager: ObservableObject {
         return true
     }
 
+    private func findCommandPath(for commandType: CommandType) -> String {
+        switch commandType {
+        case .kubectl:
+            return findKubectlPath()
+        case .flux:
+            return findFluxPath()
+        }
+    }
+
     private func findKubectlPath() -> String {
         // Common kubectl locations
         let commonPaths = [
             "/usr/local/bin/kubectl",
             "/opt/homebrew/bin/kubectl",
-            "/usr/bin/kubectl"
+            "/usr/bin/kubectl",
+            "/bin/kubectl"
         ]
 
         for path in commonPaths {
@@ -290,9 +313,32 @@ class MultiClusterCommandManager: ObservableObject {
         }
 
         // Try to find kubectl in PATH
+        return findCommandInPath("kubectl") ?? "/usr/local/bin/kubectl"
+    }
+
+    private func findFluxPath() -> String {
+        // Common flux locations
+        let commonPaths = [
+            "/usr/local/bin/flux",
+            "/opt/homebrew/bin/flux",
+            "/usr/bin/flux",
+            "/bin/flux"
+        ]
+
+        for path in commonPaths {
+            if FileManager.default.fileExists(atPath: path) {
+                return path
+            }
+        }
+
+        // Try to find flux in PATH
+        return findCommandInPath("flux") ?? "/usr/local/bin/flux"
+    }
+
+    private func findCommandInPath(_ commandName: String) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        process.arguments = ["kubectl"]
+        process.arguments = [commandName]
 
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -312,10 +358,9 @@ class MultiClusterCommandManager: ObservableObject {
                 }
             }
         } catch {
-            // Fall back to default
+            // Fall back to nil
         }
 
-        // Default fallback
-        return "/usr/local/bin/kubectl"
+        return nil
     }
 }

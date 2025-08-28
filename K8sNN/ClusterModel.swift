@@ -1,5 +1,30 @@
 import Foundation
 
+// MARK: - Command Types
+
+enum CommandType: String, CaseIterable {
+    case kubectl = "kubectl"
+    case flux = "flux"
+
+    var displayName: String {
+        switch self {
+        case .kubectl:
+            return "kubectl"
+        case .flux:
+            return "flux"
+        }
+    }
+
+    var placeholderCommand: String {
+        switch self {
+        case .kubectl:
+            return "get pods --all-namespaces"
+        case .flux:
+            return "get kustomizations"
+        }
+    }
+}
+
 // MARK: - Multi-Cluster Command Models
 
 struct MultiClusterCommand: Identifiable {
@@ -7,12 +32,14 @@ struct MultiClusterCommand: Identifiable {
     let command: String
     let targetClusters: [String] // cluster names
     let createdAt: Date
+    let commandType: CommandType
     var executionSession: CommandExecutionSession?
 
-    init(command: String, targetClusters: [String]) {
+    init(command: String, targetClusters: [String], commandType: CommandType = .kubectl) {
         self.command = command
         self.targetClusters = targetClusters
         self.createdAt = Date()
+        self.commandType = commandType
     }
 }
 
@@ -21,15 +48,17 @@ struct CommandExecutionSession: Identifiable {
     let command: String
     let targetClusters: [String]
     let startTime: Date
+    let commandType: CommandType
     var endTime: Date?
     var status: ExecutionStatus
     var results: [ClusterCommandResult]
     var progress: Double // 0.0 to 1.0
 
-    init(command: String, targetClusters: [String]) {
+    init(command: String, targetClusters: [String], commandType: CommandType = .kubectl) {
         self.command = command
         self.targetClusters = targetClusters
         self.startTime = Date()
+        self.commandType = commandType
         self.status = .running
         self.results = []
         self.progress = 0.0
@@ -58,16 +87,18 @@ struct ClusterCommandResult: Identifiable {
     let clusterName: String
     let command: String
     let startTime: Date
+    let commandType: CommandType
     var endTime: Date?
     var status: CommandResultStatus
     var output: String
     var errorOutput: String
     var exitCode: Int32?
 
-    init(clusterName: String, command: String) {
+    init(clusterName: String, command: String, commandType: CommandType = .kubectl) {
         self.clusterName = clusterName
         self.command = command
         self.startTime = Date()
+        self.commandType = commandType
         self.status = .running
         self.output = ""
         self.errorOutput = ""
