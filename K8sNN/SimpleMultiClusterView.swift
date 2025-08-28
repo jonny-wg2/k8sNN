@@ -97,65 +97,9 @@ struct SimpleMultiClusterView: View {
                 .fontWeight(.semibold)
 
             HStack {
-                // Elegant command type selector with liquid glass effect
-                Menu {
-                    ForEach(CommandType.allCases, id: \.self) { commandType in
-                        Button(action: {
-                            selectedCommandType = commandType
-                        }) {
-                            HStack {
-                                Text(commandType.displayName)
-                                    .font(.system(.caption, design: .monospaced))
-                                    .fontWeight(.medium)
-                                Spacer()
-                                if selectedCommandType == commandType {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(.blue)
-                                        .font(.system(size: 10, weight: .medium))
-                                }
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background {
-                                if selectedCommandType == commandType {
-                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                        .fill(.blue.opacity(0.1))
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                } label: {
-                    HStack(spacing: 3) {
-                        Text(selectedCommandType.displayName)
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundStyle(.secondary)
-
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 8, weight: .medium))
-                            .foregroundStyle(.secondary.opacity(0.7))
-                            .scaleEffect(0.8)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(.secondary.opacity(0.04))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .stroke(.secondary.opacity(0.1), lineWidth: 0.5)
-                            }
-                            .background {
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(.ultraThinMaterial)
-                                    .shadow(color: .secondary.opacity(0.05), radius: 4, x: 0, y: 1)
-                            }
-                    }
-                }
-                .buttonStyle(.plain)
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .padding(.leading, 4)
+                // Apple-style elegant command type selector
+                CommandTypeSegmentedControl(selectedCommandType: $selectedCommandType)
+                    .padding(.leading, 4)
 
                 TextField(selectedCommandType.placeholderCommand, text: $commandText)
                     .textFieldStyle(.plain)
@@ -372,6 +316,67 @@ struct SimpleMultiClusterView: View {
 
         // Default fallback
         return "/usr/local/bin/kubectl"
+    }
+}
+
+struct CommandTypeSegmentedControl: View {
+    @Binding var selectedCommandType: CommandType
+    @Namespace private var selectionIndicator
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(CommandType.allCases, id: \.self) { commandType in
+                Button(action: {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8, blendDuration: 0)) {
+                        selectedCommandType = commandType
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        // Icon for each command type
+                        Image(systemName: commandType.iconName)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(selectedCommandType == commandType ? .white : .secondary)
+
+                        Text(commandType.displayName)
+                            .font(.system(.caption, design: .monospaced, weight: .medium))
+                            .foregroundStyle(selectedCommandType == commandType ? .white : .secondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background {
+                        if selectedCommandType == commandType {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(.blue.gradient)
+                                .matchedGeometryEffect(id: "selection", in: selectionIndicator)
+                                .shadow(color: .blue.opacity(0.3), radius: 4, x: 0, y: 2)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .stroke(.quaternary, lineWidth: 0.5)
+                }
+                .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
+        }
+    }
+}
+
+// Extension to add icons for command types
+extension CommandType {
+    var iconName: String {
+        switch self {
+        case .kubectl:
+            return "terminal"
+        case .flux:
+            return "arrow.triangle.2.circlepath"
+        }
     }
 }
 

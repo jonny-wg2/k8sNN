@@ -3,6 +3,69 @@ import AppKit
 
 // MARK: - Visual Effect View Wrapper
 
+// MARK: - Elegant Segmented Control for Command Type
+struct CommandTypeSegmentedControl: View {
+    @Binding var selectedCommandType: CommandType
+    @Namespace private var selectionIndicator
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(CommandType.allCases, id: \.self) { commandType in
+                Button(action: {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8, blendDuration: 0)) {
+                        selectedCommandType = commandType
+                    }
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: commandType.iconName)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(selectedCommandType == commandType ? .white : .secondary)
+
+                        Text(commandType.displayName)
+                            .font(.system(.caption, design: .monospaced))
+                            .fontWeight(.medium)
+                            .foregroundStyle(selectedCommandType == commandType ? .white : .secondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background {
+                        if selectedCommandType == commandType {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(.blue.gradient)
+                                .matchedGeometryEffect(id: "cmdTypeSelection", in: selectionIndicator)
+                                .shadow(color: .blue.opacity(0.25), radius: 4, x: 0, y: 2)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(.white.opacity(0.12), lineWidth: 0.5)
+                }
+                .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
+        }
+    }
+}
+
+// Icons for each command type
+extension CommandType {
+    var iconName: String {
+        switch self {
+        case .kubectl:
+            return "terminal"
+        case .flux:
+            return "arrow.triangle.2.circlepath"
+        }
+    }
+}
+
+
 struct VisualEffectView: NSViewRepresentable {
     let material: NSVisualEffectView.Material
     let blendingMode: NSVisualEffectView.BlendingMode
@@ -283,76 +346,11 @@ struct FloatingMultiClusterView: View {
 
     private var commandInputBar: some View {
         HStack(spacing: 0) {
-            // Elegant command type selector with liquid glass effect
-            Menu {
-                ForEach(CommandType.allCases, id: \.self) { commandType in
-                    Button(action: {
-                        selectedCommandType = commandType
-                        validateCommand(commandText)
-                    }) {
-                        HStack {
-                            Text(commandType.displayName)
-                                .font(.system(.body, design: .monospaced))
-                                .fontWeight(.medium)
-                            Spacer()
-                            if selectedCommandType == commandType {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(.blue)
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background {
-                            if selectedCommandType == commandType {
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(.blue.opacity(0.1))
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
+            // Apple-style elegant segmented control for command type
+            CommandTypeSegmentedControl(selectedCommandType: $selectedCommandType)
+                .onChange(of: selectedCommandType) { _, _ in
+                    validateCommand(commandText)
                 }
-            } label: {
-                HStack(spacing: 6) {
-                    Text(selectedCommandType.displayName)
-                        .font(.system(.title3, design: .monospaced))
-                        .foregroundStyle(.blue)
-                        .fontWeight(.semibold)
-
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.blue.opacity(0.7))
-                        .scaleEffect(0.8)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 16)
-                .background {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(.blue.opacity(0.08))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(.blue.opacity(0.2), lineWidth: 0.5)
-                        }
-                        .background {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                                .shadow(color: .blue.opacity(0.1), radius: 8, x: 0, y: 2)
-                        }
-                }
-            }
-            .buttonStyle(.plain)
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .background {
-                // Custom menu background with liquid glass effect
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: .black.opacity(0.1), radius: 12, x: 0, y: 4)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(.primary.opacity(0.1), lineWidth: 0.5)
-                    }
-            }
 
             // Command input
             TextField(selectedCommandType.placeholderCommand, text: $commandText)
@@ -772,66 +770,11 @@ struct SimpleMultiClusterView: View {
             }
 
             HStack(spacing: 0) {
-                // Elegant command type selector with liquid glass effect
-                Menu {
-                    ForEach(CommandType.allCases, id: \.self) { commandType in
-                        Button(action: {
-                            selectedCommandType = commandType
-                            validateCommand(commandText)
-                        }) {
-                            HStack {
-                                Text(commandType.displayName)
-                                    .font(.system(.body, design: .monospaced))
-                                    .fontWeight(.medium)
-                                Spacer()
-                                if selectedCommandType == commandType {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(.blue)
-                                        .font(.system(size: 11, weight: .medium))
-                                }
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background {
-                                if selectedCommandType == commandType {
-                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .fill(.blue.opacity(0.1))
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
+                // Apple-style elegant segmented control for command type
+                CommandTypeSegmentedControl(selectedCommandType: $selectedCommandType)
+                    .onChange(of: selectedCommandType) { _, _ in
+                        validateCommand(commandText)
                     }
-                } label: {
-                    HStack(spacing: 5) {
-                        Text(selectedCommandType.displayName)
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundStyle(.blue)
-                            .fontWeight(.medium)
-
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.blue.opacity(0.7))
-                            .scaleEffect(0.8)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .background {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(.blue.opacity(0.06))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(.blue.opacity(0.15), lineWidth: 0.5)
-                            }
-                            .background {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(.ultraThinMaterial)
-                                    .shadow(color: .blue.opacity(0.08), radius: 6, x: 0, y: 1)
-                            }
-                    }
-                }
-                .buttonStyle(.plain)
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
 
                 TextField(selectedCommandType.placeholderCommand, text: $commandText)
                     .textFieldStyle(.plain)
