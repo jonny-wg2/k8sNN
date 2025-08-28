@@ -303,6 +303,63 @@ struct SettingsView: View {
 
             Divider()
 
+            // Auto-Start Settings
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Startup")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+
+                Text("Configure whether K8sNN starts automatically when you log in")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 12) {
+                    Toggle("Start automatically on login", isOn: $settingsManager.autoStartOnLogin)
+                        .toggleStyle(.switch)
+                        .onChange(of: settingsManager.autoStartOnLogin) { _, _ in
+                            settingsManager.saveSettings()
+                        }
+
+                    Spacer()
+
+                    if settingsManager.autoStartOnLogin {
+                        HStack(spacing: 6) {
+                            Image(systemName: "power.circle.fill")
+                                .foregroundStyle(.green)
+                                .font(.caption)
+                            Text("Auto-start enabled")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                                .fontWeight(.medium)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+                    } else {
+                        HStack(spacing: 6) {
+                            Image(systemName: "power.circle")
+                                .foregroundStyle(.secondary)
+                                .font(.caption)
+                            Text("Manual start")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fontWeight(.medium)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+
+                Text("When enabled, K8sNN will automatically start when you log in to your Mac, appearing in the menu bar.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 4)
+            }
+            .padding(.vertical, 8)
+
+            Divider()
+
             // Usage Instructions
             VStack(alignment: .leading, spacing: 12) {
                 Text("How to Use")

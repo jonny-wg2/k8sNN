@@ -3,6 +3,7 @@ import SwiftUI
 import AppKit
 import Carbon
 import ApplicationServices
+import ServiceManagement
 
 enum ClusterSortOrder: String, CaseIterable {
     case connectedFirst = "connected_first"
@@ -31,6 +32,7 @@ class SettingsManager: ObservableObject {
     @Published var menuBarHeight: Double = 500.0
     @Published var preventDeleteCommands: Bool = true
     @Published var defaultCommandType: CommandType = .kubectl
+    @Published var autoStartOnLogin: Bool = true
 
     // Multi-cluster window size settings
     @Published var multiClusterWindowWidth: Double = 1000
@@ -43,6 +45,11 @@ class SettingsManager: ObservableObject {
     init() {
         loadSettings()
         setupHotkey()
+
+        // Set up auto-start on first launch (if setting is enabled)
+        if autoStartOnLogin {
+            updateLoginItem()
+        }
     }
     
     deinit {
@@ -122,6 +129,13 @@ class SettingsManager: ObservableObject {
            let commandType = CommandType(rawValue: commandTypeString) {
             defaultCommandType = commandType
         }
+
+        // Load auto-start setting (default to true)
+        if defaults.object(forKey: "autoStartOnLogin") == nil {
+            autoStartOnLogin = true // Default to enabled
+        } else {
+            autoStartOnLogin = defaults.bool(forKey: "autoStartOnLogin")
+        }
     }
     
     func saveSettings() {
@@ -162,6 +176,15 @@ class SettingsManager: ObservableObject {
 
         // Save default command type
         defaults.set(defaultCommandType.rawValue, forKey: "defaultCommandType")
+
+        // Save auto-start setting and update login item
+        let oldAutoStart = defaults.object(forKey: "autoStartOnLogin") as? Bool ?? true
+        defaults.set(autoStartOnLogin, forKey: "autoStartOnLogin")
+
+        // Update login item if auto-start setting changed
+        if oldAutoStart != autoStartOnLogin {
+            updateLoginItem()
+        }
 
         // Only re-register hotkey if it actually changed
         if oldHotkey != hotkey || oldEnabled != isHotkeyEnabled {
@@ -793,6 +816,80 @@ class SettingsManager: ObservableObject {
         }
 
         return nil
+    }
+
+    // MARK: - Auto-Start Functionality
+
+    func updateLoginItem() {
+        if autoStartOnLogin {
+            enableAutoStart()
+        } else {
+            disableAutoStart()
+        }
+    }
+
+    private func enableAutoStart() {
+        if #available(macOS 13.0, *) {
+            // Use modern SMAppService API for macOS 13+
+            do {
+                let service = SMAppService.mainApp
+                try service.register()
+                NSLog("[K8sNN] Successfully enabled auto-start on login using SMAppService")
+            } catch {
+                NSLog("[K8sNN] Failed to enable auto-start on login: \(error)")
+            }
+        } else {
+            // Fallback to legacy API for older macOS versions
+            guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
+                NSLog("[K8sNN] Failed to get bundle identifier for auto-start")
+                return
+            }
+
+            let success = SMLoginItemSetEnabled(bundleIdentifier as CFString, true)
+            if success {
+                NSLog("[K8sNN] Successfully enabled auto-start on login using legacy API")
+            } else {
+                NSLog("[K8sNN] Failed to enable auto-start on login using legacy API")
+            }
+        }
+    }
+
+    private func disableAutoStart() {
+        if #available(macOS 13.0, *) {
+            // Use modern SMAppService API for macOS 13+
+            do {
+                let service = SMAppService.mainApp
+                try service.unregister()
+                NSLog("[K8sNN] Successfully disabled auto-start on login using SMAppService")
+            } catch {
+                NSLog("[K8sNN] Failed to disable auto-start on login: \(error)")
+            }
+        } else {
+            // Fallback to legacy API for older macOS versions
+            guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
+                NSLog("[K8sNN] Failed to get bundle identifier for auto-start")
+                return
+            }
+
+            let success = SMLoginItemSetEnabled(bundleIdentifier as CFString, false)
+            if success {
+                NSLog("[K8sNN] Successfully disabled auto-start on login using legacy API")
+            } else {
+                NSLog("[K8sNN] Failed to disable auto-start on login using legacy API")
+            }
+        }
+    }
+
+    func isAutoStartEnabled() -> Bool {
+        if #available(macOS 13.0, *) {
+            // Use modern SMAppService API for macOS 13+
+            let service = SMAppService.mainApp
+            return service.status == .enabled
+        } else {
+            // For older macOS versions, we'll just return the stored setting
+            // since checking the actual login items is complex and deprecated
+            return autoStartOnLogin
+        }
     }
 }
 

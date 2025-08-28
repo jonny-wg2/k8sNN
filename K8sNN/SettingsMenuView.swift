@@ -256,6 +256,41 @@ struct SettingsMenuView: View {
 
                     Divider()
 
+                    // Auto-Start Settings
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Startup")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+
+                        HStack(spacing: 12) {
+                            Toggle("Start on login", isOn: $settingsManager.autoStartOnLogin)
+                                .toggleStyle(.switch)
+                                .onChange(of: settingsManager.autoStartOnLogin) { _, _ in
+                                    settingsManager.saveSettings()
+                                }
+
+                            Spacer()
+
+                            if settingsManager.autoStartOnLogin {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "power.circle.fill")
+                                        .foregroundStyle(.green)
+                                        .font(.caption)
+                                    Text("Auto-start")
+                                        .font(.caption)
+                                        .foregroundStyle(.green)
+                                        .fontWeight(.medium)
+                                }
+                            }
+                        }
+
+                        Text("K8sNN will automatically start when you log in")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Divider()
+
                     // Usage Instructions
                     VStack(alignment: .leading, spacing: 12) {
                         Text("How to Use")
