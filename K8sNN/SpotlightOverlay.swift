@@ -155,8 +155,20 @@ struct SpotlightOverlay: View {
     @State private var selectedClusters: Set<String> = []
     @State private var isExecuting = false
     @State private var executionResults: [ClusterExecutionResult] = []
-    // Layout: 0 = Auto, 1-4 = fixed columns
-    @State private var columnSelection: Int = 0
+    // Layout & display preferences
+    @AppStorage("mc_layoutColumns") private var columnSelection: Int = 0 // 0 = Auto, 1–4 fixed
+    @AppStorage("mc_density") private var densityRaw: String = DisplayDensity.comfort.rawValue
+    @AppStorage("mc_focusMode") private var focusMode: Bool = false
+    @State private var shortcutsMonitor: Any?
+
+    enum DisplayDensity: String, CaseIterable {
+        case comfort, compact
+        var title: String { self == .comfort ? "Comfort" : "Compact" }
+    }
+
+    private var displayDensity: DisplayDensity {
+        DisplayDensity(rawValue: densityRaw) ?? .comfort
+    }
 
     init(initialMode: SpotlightMode = .clusters) {
         self._currentMode = State(initialValue: initialMode)
@@ -257,6 +269,39 @@ struct SpotlightOverlay: View {
         .onKeyPress(.escape) {
             NotificationCenter.default.post(name: .hideSpotlight, object: "escKeySwiftUI")
             return .handled
+        }
+        .onAppear {
+            // Install local keyboard shortcuts for layout/density/focus
+            shortcutsMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
+                guard currentMode == .multiCluster else { return event }
+
+                // Require Command (⌘) to avoid interfering with typing
+                let mods = event.modifierFlags
+                guard mods.contains(.command) else { return event }
+
+                if let chars = event.charactersIgnoringModifiers?.lowercased() {
+                    // Cmd+0..4: set columns (0 = Auto)
+                    if chars == "0" { columnSelection = 0; return nil }
+                    if chars == "1" { columnSelection = 1; return nil }
+                    if chars == "2" { columnSelection = 2; return nil }
+                    if chars == "3" { columnSelection = 3; return nil }
+                    if chars == "4" { columnSelection = 4; return nil }
+
+                    // Cmd+Shift+F: toggle Focus mode
+                    if chars == "f", mods.contains(.shift) { focusMode.toggle(); return nil }
+
+                    // Cmd+Option+C: Compact, Cmd+Option+V: Comfort
+                    if mods.contains(.option) {
+                        if chars == "c" { densityRaw = DisplayDensity.compact.rawValue; return nil }
+                        if chars == "v" { densityRaw = DisplayDensity.comfort.rawValue; return nil }
+                    }
+                }
+                return event
+            }
+        }
+        .onDisappear {
+            if let monitor = shortcutsMonitor { NSEvent.removeMonitor(monitor) }
+            shortcutsMonitor = nil
         }
     }
 
@@ -473,12 +518,10 @@ struct SpotlightOverlay: View {
             // Results
             if !executionResults.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    // Layout controls
-                    HStack(spacing: 8) {
-                        Text("Layout")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Picker("", selection: $columnSelection) {
+                    // Layout & display controls
+                    HStack(spacing: 10) {
+                        // Columns
+                        Picker("Layout", selection: $columnSelection) {
                             Text("Auto").tag(0)
                             Text("1").tag(1)
                             Text("2").tag(2)
@@ -486,21 +529,38 @@ struct SpotlightOverlay: View {
                             Text("4").tag(4)
                         }
                         .pickerStyle(.segmented)
-                        .frame(width: 260)
+                        .frame(width: 280)
+
+                        // Density
+                        Picker("Density", selection: Binding(
+                            get: { displayDensity },
+                            set: { densityRaw = $0.rawValue }
+                        )) {
+                            ForEach(DisplayDensity.allCases, id: \.self) { d in
+                                Text(d.title).tag(d)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 200)
+
+                        // Focus mode
+                        Toggle("Single-column focus", isOn: $focusMode)
+                            .toggleStyle(.switch)
                     }
                     .padding(.horizontal, 20)
 
                     GeometryReader { geo in
+                        let fixedCols = focusMode ? 1 : (columnSelection == 0 ? nil : columnSelection)
                         let layout = calculateOverlayTileLayout(
                             count: executionResults.count,
                             size: geo.size,
-                            spacing: 12,
-                            fixedColumns: columnSelection == 0 ? nil : columnSelection
+                            spacing: displayDensity == .compact ? 8 : 12,
+                            fixedColumns: fixedCols
                         )
                         ScrollView {
-                            LazyVGrid(columns: layout.columns, spacing: 12) {
+                            LazyVGrid(columns: layout.columns, spacing: displayDensity == .compact ? 8 : 12) {
                                 ForEach(executionResults) { result in
-                                    MultiClusterResultRow(result: result)
+                                    MultiClusterResultRow(result: result, density: displayDensity)
                                         .frame(height: layout.tileHeight)
                                 }
                             }
@@ -938,10 +998,11 @@ struct ClusterToggleChip: View {
 
 struct MultiClusterResultRow: View {
     let result: SpotlightOverlay.ClusterExecutionResult
+    var density: SpotlightOverlay.DisplayDensity = .comfort
     @State private var isExpanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: density == .compact ? 6 : 8) {
             // Header
             HStack {
                 Circle()
@@ -949,7 +1010,7 @@ struct MultiClusterResultRow: View {
                     .frame(width: 8, height: 8)
 
                 Text(result.clusterName)
-                    .font(.system(.callout, design: .default))
+                    .font(density == .compact ? .caption : .system(.callout))
                     .fontWeight(.semibold)
                     .lineLimit(1)
 
@@ -973,12 +1034,12 @@ struct MultiClusterResultRow: View {
 
             // Output content
             ScrollView {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: density == .compact ? 4 : 6) {
                     // Success output
                     if !result.output.isEmpty {
                         Text(result.output)
-                            .font(.system(.footnote, design: .monospaced))
-                            .lineSpacing(1.5)
+                            .font(.system(density == .compact ? .caption2 : .footnote, design: .monospaced))
+                            .lineSpacing(density == .compact ? 1.0 : 1.5)
                             .foregroundStyle(.primary)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -987,8 +1048,8 @@ struct MultiClusterResultRow: View {
                     // Error output
                     if let error = result.error, !error.isEmpty {
                         Text(error)
-                            .font(.system(.footnote, design: .monospaced))
-                            .lineSpacing(1.5)
+                            .font(.system(density == .compact ? .caption2 : .footnote, design: .monospaced))
+                            .lineSpacing(density == .compact ? 1.0 : 1.5)
                             .foregroundStyle(.red)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1003,9 +1064,9 @@ struct MultiClusterResultRow: View {
                     }
                 }
             }
-            .frame(minHeight: isExpanded ? 160 : 80)
+            .frame(minHeight: isExpanded ? (density == .compact ? 160 : 220) : (density == .compact ? 90 : 120))
             .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            .padding(.vertical, density == .compact ? 4 : 6)
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(result.isSuccess ? .clear : .red.opacity(0.05))
@@ -1016,8 +1077,8 @@ struct MultiClusterResultRow: View {
             )
             .animation(.easeInOut(duration: 0.2), value: isExpanded)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, density == .compact ? 10 : 12)
+        .padding(.vertical, density == .compact ? 8 : 10)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
         .frame(maxWidth: .infinity, alignment: .leading)
     }
