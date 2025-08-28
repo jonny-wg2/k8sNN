@@ -115,59 +115,6 @@ struct SettingsMenuView: View {
 
                     Divider()
 
-                    // Multi-Cluster Window Size Settings
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Multi-Cluster Window Size")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-
-                        Text("Configure the window size for the multi-cluster kubectl interface")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        VStack(spacing: 8) {
-                            // Width setting
-                            HStack {
-                                Text("Width:")
-                                    .font(.caption)
-                                    .frame(width: 50, alignment: .leading)
-
-                                Slider(value: $settingsManager.multiClusterWindowWidth, in: 800...2000, step: 50) {
-                                    Text("Width")
-                                }
-                                .onChange(of: settingsManager.multiClusterWindowWidth) { _, _ in
-                                    settingsManager.saveSettings()
-                                }
-
-                                Text("\(Int(settingsManager.multiClusterWindowWidth))")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 40, alignment: .trailing)
-                            }
-
-                            // Height setting
-                            HStack {
-                                Text("Height:")
-                                    .font(.caption)
-                                    .frame(width: 50, alignment: .leading)
-
-                                Slider(value: $settingsManager.multiClusterWindowHeight, in: 500...1200, step: 50) {
-                                    Text("Height")
-                                }
-                                .onChange(of: settingsManager.multiClusterWindowHeight) { _, _ in
-                                    settingsManager.saveSettings()
-                                }
-
-                                Text("\(Int(settingsManager.multiClusterWindowHeight))")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 40, alignment: .trailing)
-                            }
-                        }
-                    }
-
-                    Divider()
-
                     // Safety Settings
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Safety & Security")

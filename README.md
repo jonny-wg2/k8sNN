@@ -1,138 +1,111 @@
-# K8sNN - Kubernetes Cluster Authentication Monitor
+# K8sNN - Kubernetes Multi-Cluster Management
 
-A beautiful macOS menubar app that monitors the authentication status of your Kubernetes clusters and provides quick access to Dex login pages.
+A macOS menu bar app that solves the pain of managing authentication and running commands across multiple Kubernetes clusters.
 
-## Features
+## The Problem
 
-- **Real-time Authentication Monitoring**: Shows green/red status indicators for each cluster
-- **Automatic Cluster Discovery**: Reads your kubectl config to find all configured clusters
-- **One-Click Login**: Click on unauthenticated clusters to open their Dex login pages
-- **Native macOS Design**: Clean, professional menubar interface
-- **Periodic Checks**: Automatically refreshes authentication status every 5 minutes
-- **Smart URL Generation**: Automatically constructs login URLs for wgtwo.com clusters
+Working with multiple Kubernetes clusters is frustrating:
 
-## Download
+- **Authentication expires constantly** - You never know which clusters you're authenticated to
+- **Manual login is tedious** - Finding and opening the right Dex/OIDC login URLs
+- **Context switching is slow** - Manually switching kubectl contexts and opening terminals
+- **Multi-cluster operations are painful** - Running the same command across multiple clusters requires scripts or repetitive work
 
-**📥 [Download the latest release](https://github.com/jonny-wg2/k8sNN/releases/latest)**
+## The Solution
 
-### Quick Install (Command Line)
+K8sNN puts all your clusters in your menu bar with:
 
-```bash
-# Download and install the latest release
-curl -s https://api.github.com/repos/jonny-wg2/k8sNN/releases/latest \
-  | grep "browser_download_url.*K8sNN.zip" \
-  | cut -d '"' -f 4 \
-  | xargs curl -L -o K8sNN.zip
-
-# Extract and install
-unzip K8sNN.zip
-mv K8sNN.app /Applications/
-rm K8sNN.zip
-
-# Launch the app
-open /Applications/K8sNN.app
-```
-
-### Manual Download
-
-Choose from:
-
-- **K8sNN.dmg** - Easy installer with drag-and-drop setup
-- **K8sNN.zip** - Manual installation archive
-
-For detailed installation instructions, see [INSTALLATION.md](INSTALLATION.md).
-
-## Requirements
-
-- macOS 14.0 or later
-- kubectl installed and configured
-- Xcode 15.0 or later (for building from source)
+- **🟢 Real-time auth status** - See which clusters you're authenticated to at a glance
+- **⚡ One-click login** - Click any cluster to open its authentication page
+- **🚀 Instant terminal access** - Click authenticated clusters to open a terminal with the right context
+- **🔄 Multi-cluster commands** - Run kubectl/flux commands across multiple clusters simultaneously
+- **⌨️ Global hotkeys** - Quick access with ⌘⇧K (single cluster) or ⌘⇧L (multi-cluster)
+- **🔧 Custom commands** - Configure SSH tunnels or other per-cluster commands
 
 ## Installation
 
-### Option 1: Build from Source
+**📥 [Download the latest release](https://github.com/jonny-wg2/k8sNN/releases/latest)**
 
-1. Clone or download this project
-2. Open Terminal and navigate to the project directory
-3. Run the build script:
-   ```bash
-   ./build.sh
-   ```
-4. Copy the built app to your Applications folder:
-   ```bash
-   cp -r build/Build/Products/Release/K8sNN.app /Applications/
-   ```
-5. Launch K8sNN from Applications or Spotlight
+1. Download `K8sNN.dmg` or `K8sNN.zip`
+2. Drag K8sNN.app to your Applications folder
+3. Launch K8sNN - it will appear in your menu bar
+4. The app will automatically start on login (can be disabled in settings)
 
-### Option 2: Build with Xcode
+**Requirements:** macOS 14.0+, kubectl installed
 
-1. Open `K8sNN.xcodeproj` in Xcode
-2. Select the K8sNN scheme
-3. Build and run (⌘+R)
+## How to Use
 
-## Usage
+### Basic Usage
 
-1. **Launch the app**: K8sNN will appear in your menu bar with a server icon
-2. **View cluster status**: Click the menu bar icon to see all your clusters
-   - 🟢 Green dot = Authenticated
-   - 🔴 Red dot = Not authenticated
-3. **Login to clusters**: Click on any cluster with a red dot to open its login page
-4. **Refresh status**: Click the refresh button to manually check all clusters
-5. **Monitor continuously**: The app automatically checks every 5 minutes
+1. **Click the server icon** in your menu bar to see all clusters
+2. **Check authentication status**:
+   - 🟢 Green = Authenticated and ready
+   - 🔴 Red = Need to authenticate
+3. **Click any cluster** to:
+   - **Red clusters**: Open authentication page in browser
+   - **Green clusters**: Open terminal with kubectl context set
+
+### Quick Access (Hotkeys)
+
+- **⌘⇧K**: Open cluster selector - type to search, Enter to select
+- **⌘⇧L**: Open multi-cluster command interface
+
+### Multi-Cluster Commands
+
+1. Press **⌘⇧L** or click "Multi-Cluster kubectl" in menu
+2. Select clusters you want to target
+3. Type your command (e.g., `get pods`, `get nodes`)
+4. Choose command type: `kubectl` or `flux`
+5. Press Enter to run across all selected clusters
+
+### Settings & Customization
+
+- **Custom login URLs**: Override auto-generated URLs for specific clusters
+- **Custom commands**: Set up SSH tunnels or other per-cluster commands
+- **Terminal app**: Choose between Terminal.app and iTerm
+- **Auto-start**: Control whether app starts on login (enabled by default)
+- **Hotkeys**: Customize keyboard shortcuts
+
+### Examples
+
+```bash
+# Multi-cluster examples:
+get pods -n kube-system
+get nodes --show-labels
+describe deployment nginx -n default
+logs -f deployment/app -n production
+```
 
 ## How It Works
 
-K8sNN works by:
+K8sNN automatically:
 
-1. **Reading kubectl config**: Parses your `~/.kube/config` file to discover clusters
-2. **Testing authentication**: Runs `kubectl auth can-i get pods` for each cluster
-3. **Generating login URLs**: Creates Dex login URLs based on cluster names
-4. **Opening browsers**: Uses macOS to open login pages when needed
-
-## Supported Cluster Patterns
-
-The app automatically generates login URLs for clusters following these patterns:
-
-- `*.tky.prod.wgtwo.com` → `https://login.tky.prod.wgtwo.com`
-- `*.dub.prod.wgtwo.com` → `https://login.dub.prod.wgtwo.com`
-- `*.pdx.prod.wgtwo.com` → `https://login.pdx.prod.wgtwo.com`
-- `*.sto.prod.wgtwo.com` → `https://login.sto.prod.wgtwo.com`
-- `*.dub.infrasvc.wgtwo.com` → `https://login.dub.infrasvc.wgtwo.com`
-- And similar patterns for dev environments
+1. **Discovers clusters** from your `~/.kube/config` file
+2. **Tests authentication** by running `kubectl auth can-i get pods` for each cluster
+3. **Generates login URLs** for Dex/OIDC authentication (supports custom URLs)
+4. **Monitors continuously** - checks authentication status every 5 minutes
 
 ## Troubleshooting
 
-### "No clusters found"
+**No clusters found?**
 
-- Ensure kubectl is installed and in your PATH
-- Check that `~/.kube/config` exists and contains cluster configurations
-- Try running `kubectl config get-contexts` in Terminal
+- Ensure kubectl is installed and `~/.kube/config` exists
+- Run `kubectl config get-contexts` to verify your setup
 
-### "Failed to get kubectl contexts"
+**Authentication failing?**
 
-- Verify kubectl is installed at `/usr/local/bin/kubectl`
-- If kubectl is installed elsewhere, update the path in `KubernetesManager.swift`
+- Check network connectivity and VPN if required
+- Verify kubectl contexts are properly configured
 
-### Authentication checks failing
+**Need help?** [Open an issue](https://github.com/jonny-wg2/k8sNN/issues) with details about your setup.
 
-- Ensure you have network connectivity
-- Check that your kubectl contexts are properly configured
-- Some clusters may require VPN access
+## Building from Source
 
-## Architecture
+```bash
+git clone https://github.com/jonny-wg2/k8sNN.git
+cd k8sNN
+./build.sh
+cp -r build/Build/Products/Release/K8sNN.app /Applications/
+```
 
-The app consists of several key components:
-
-- **K8sNNApp.swift**: Main app entry point and menubar setup
-- **KubernetesManager.swift**: Core logic for cluster discovery and authentication checking
-- **ClusterModel.swift**: Data models for clusters and kubectl config
-- **MenuBarView.swift**: SwiftUI interface for the menubar dropdown
-- **ContentView.swift**: Placeholder view (not used in menubar mode)
-
-## Contributing
-
-Feel free to submit issues and enhancement requests!
-
-## License
-
-This project is provided as-is for personal use.
+Requires Xcode 15.0+ and macOS 14.0+.
