@@ -155,6 +155,8 @@ struct SpotlightOverlay: View {
     @State private var selectedClusters: Set<String> = []
     @State private var isExecuting = false
     @State private var executionResults: [ClusterExecutionResult] = []
+    // Layout: 0 = Auto, 1-4 = fixed columns
+    @State private var columnSelection: Int = 0
 
     init(initialMode: SpotlightMode = .clusters) {
         self._currentMode = State(initialValue: initialMode)
@@ -470,17 +472,41 @@ struct SpotlightOverlay: View {
 
             // Results
             if !executionResults.isEmpty {
-                GeometryReader { geo in
-                    let layout = calculateOverlayTileLayout(count: executionResults.count, size: geo.size, spacing: 12)
-                    ScrollView {
-                        LazyVGrid(columns: layout.columns, spacing: 12) {
-                            ForEach(executionResults) { result in
-                                MultiClusterResultRow(result: result)
-                                    .frame(height: layout.tileHeight)
-                            }
+                VStack(alignment: .leading, spacing: 8) {
+                    // Layout controls
+                    HStack(spacing: 8) {
+                        Text("Layout")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Picker("", selection: $columnSelection) {
+                            Text("Auto").tag(0)
+                            Text("1").tag(1)
+                            Text("2").tag(2)
+                            Text("3").tag(3)
+                            Text("4").tag(4)
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 20)
+                        .pickerStyle(.segmented)
+                        .frame(width: 260)
+                    }
+                    .padding(.horizontal, 20)
+
+                    GeometryReader { geo in
+                        let layout = calculateOverlayTileLayout(
+                            count: executionResults.count,
+                            size: geo.size,
+                            spacing: 12,
+                            fixedColumns: columnSelection == 0 ? nil : columnSelection
+                        )
+                        ScrollView {
+                            LazyVGrid(columns: layout.columns, spacing: 12) {
+                                ForEach(executionResults) { result in
+                                    MultiClusterResultRow(result: result)
+                                        .frame(height: layout.tileHeight)
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 20)
+                        }
                     }
                 }
                 .frame(maxHeight: .infinity)
@@ -506,17 +532,22 @@ struct SpotlightOverlay: View {
         }
     }
     // MARK: - Overlay Tiled Grid Layout Helper
-    private func calculateOverlayTileLayout(count: Int, size: CGSize, spacing: CGFloat) -> (columns: [GridItem], tileHeight: CGFloat) {
+    private func calculateOverlayTileLayout(count: Int, size: CGSize, spacing: CGFloat, fixedColumns: Int?) -> (columns: [GridItem], tileHeight: CGFloat) {
         guard count > 0 else {
             return (columns: [GridItem(.flexible())], tileHeight: 200)
         }
 
+        let maxColumns = 4
         let cols: Int
-        switch count {
-        case 1: cols = 1
-        case 2...4: cols = 2
-        case 5...9: cols = 3
-        default: cols = 4
+        if let fixed = fixedColumns {
+            cols = max(1, min(maxColumns, min(count, fixed)))
+        } else {
+            // Make tiles wider based on available width, not just count
+            let horizontalPadding: CGFloat = 40 // matches .padding(.horizontal, 20)
+            let effectiveWidth = max(0, size.width - horizontalPadding)
+            let minTileWidth: CGFloat = 560 // target min width for readability
+            let widthBasedColumns = max(1, Int(floor((effectiveWidth + spacing) / (minTileWidth + spacing))))
+            cols = min(maxColumns, min(count, widthBasedColumns))
         }
 
         let columns = Array(repeating: GridItem(.flexible(), spacing: spacing), count: cols)
@@ -666,7 +697,7 @@ struct SpotlightOverlay: View {
         // Get the current window
         guard let window = NSApp.keyWindow as? SpotlightOverlayWindow else { return }
 
-        let width: CGFloat = currentMode == .multiCluster ? 1000 : 600
+        let width: CGFloat = currentMode == .multiCluster ? 1280 : 600
         let height: CGFloat = currentMode == .multiCluster ? 700 : 400
 
         window.updateSize(width: width, height: height)
@@ -918,7 +949,7 @@ struct MultiClusterResultRow: View {
                     .frame(width: 8, height: 8)
 
                 Text(result.clusterName)
-                    .font(.subheadline)
+                    .font(.system(.callout, design: .default))
                     .fontWeight(.semibold)
                     .lineLimit(1)
 
@@ -946,7 +977,8 @@ struct MultiClusterResultRow: View {
                     // Success output
                     if !result.output.isEmpty {
                         Text(result.output)
-                            .font(.system(.caption2, design: .monospaced))
+                            .font(.system(.footnote, design: .monospaced))
+                            .lineSpacing(1.5)
                             .foregroundStyle(.primary)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -955,7 +987,8 @@ struct MultiClusterResultRow: View {
                     // Error output
                     if let error = result.error, !error.isEmpty {
                         Text(error)
-                            .font(.system(.caption2, design: .monospaced))
+                            .font(.system(.footnote, design: .monospaced))
+                            .lineSpacing(1.5)
                             .foregroundStyle(.red)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
